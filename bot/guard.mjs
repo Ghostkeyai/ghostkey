@@ -91,6 +91,8 @@ const MARKETING = [
   /\b(marketing|promotion|promo|advertis\w*|pr)\s*(service|package|team|agency|expert|offer|deal|plan|campaign)s?\b|\bpaid\s*(promo|promotion|post)\b/i,
   /\b(i'?m|i am)\s*(a\s*)?(marketer|promoter|kol|influencer|crypto\s*marketer|community\s*manager|moderator for hire)\b/i,
   /\b(partnership|collab\w*)\s*(offer|proposal|opportunity|request)\b/i,
+  // promosi channel "call" / grup VIP / proyek lain
+  /\b(new|next|alpha|vip|gem)\s*calls?\b|\bcalls?\s*(channel|group|loading)\b|\bvip\s*(group|channel|chat|access)\b|\bdon'?t miss (out|this|it)\b|\b(join|check)\s*(my|our)\s*(channel|group|vip|calls?)\b|\bdropping (shortly|soon|now)\b|\bnext\s*\d{2,4}\s*x\b|\bdid\s*\d{2,4}\s*x\b/i,
 ];
 const isMarketing = (t) => MARKETING.some((r) => r.test(t));
 const strikes = new Map(); // userId → { n, at } (memori saja)
@@ -224,10 +226,15 @@ async function onMessage(msg) {
     return sayTemp(chatId, `${esc(nameOf(from))}, promo and "DM me" offers aren't allowed here. A second one gets you removed.`, 20_000);
   }
 
-  // pesan terusan dari kanal / akun lain = pola spam umum
-  if (STRICT && (msg.forward_origin || msg.forward_from_chat)) {
+  // pesan terusan dari channel/grup/akun lain = pola spam "call" & promo → hapus; ke-2 dalam 24 jam → blokir
+  if (msg.forward_origin || msg.forward_from_chat || msg.forward_from || msg.forward_sender_name) {
     await tg('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
-    return sayTemp(chatId, `${esc(nameOf(from))}, forwarded posts are removed here to keep scams out.`, 20_000);
+    if (strike(from.id) >= 2) {
+      await tg('banChatMember', { chat_id: chatId, user_id: from.id });
+      console.log('[guard] penerus promo diblokir', from.id, nameOf(from));
+      return sayTemp(chatId, `${esc(nameOf(from))} was removed for repeated forwarded promos.`, 20_000);
+    }
+    return sayTemp(chatId, `${esc(nameOf(from))}, forwarded posts aren't allowed here. A second one gets you removed.`, 20_000);
   }
   // alamat 0x selain CA resmi
   const ca = await officialCA();
