@@ -74,18 +74,52 @@ async function sayTemp(chatId, text, ms = 30_000, extra = {}) {
 
 // ---------- verifikasi anggota baru ----------
 const pending = new Map(); // `${chat}:${user}` → { msgId, timer }
-const IMPOSTOR = /(ghost\s*key|ghostkey).{0,12}(admin|support|team|mod|help|official|dev)|(admin|support|team|mod|official|dev).{0,12}(ghost\s*key|ghostkey)/i;
+const ROLE = 'admin|support|team|mod|moderator|help|helpdesk|desk|care|service|official|dev|developer|agent|rep|manager|ambassador|assistant|staff|founder|ceo|cm';
+const IMPOSTOR = new RegExp(`(ghost\\s*key).{0,14}\\b(${ROLE})\\b|\\b(${ROLE})\\b.{0,14}(ghost\\s*key)`, 'i');
+// nama yang isinya hampir hanya "GHOSTKEY" (± ai / official / simbol) = menyamar jadi akun proyek
+const BARE_NAME = /^[^a-z0-9]*(the\s*)?ghost\s*key\s*(ai|official|app|io|hq|xyz)?[^a-z0-9]*$/i;
+const looksImpostor = (u) => IMPOSTOR.test(nameOf(u)) || IMPOSTOR.test(u.username || '') || BARE_NAME.test(nameOf(u))
+  || (/ghost_?key/i.test(u.username || '') && !/^ghostkeyai(_bot)?$/i.test(u.username || ''));
+// teks yang mengaku dari tim / agen GHOSTKEY
+const CLAIMS_TEAM = new RegExp(`\\b(i'?m|i am|we'?re|we are|this is|from|as)\\b.{0,25}(ghost\\s*key).{0,25}\\b(${ROLE})\\b|\\b(official|verified)\\s+(ghost\\s*key)\\s+(${ROLE})\\b`, 'i');
+// jasa marketing / listing / trending / volume + ajakan DM (pola spam setelah listing DEX Screener)
+const MARKETING = [
+  /\b(i|we)\s*(can|will|could|offer|provide|help|do|handle)\b.{0,60}\b(market|promot|trend|listing|list your|volume|holders?|kol|shill|growth|raid|boost|exposure|visibility|community management)/i,
+  /\b(dm|pm|inbox|message|text|contact)\s*(me|us)\b|\bcheck (your )?(dm|inbox|pm)\b|\bsent you a (dm|message)\b/i,
+  /\b(cmc|coinmarketcap|coingecko|cg)\b.{0,20}\b(listing|list|fast.?track)\b|\bfast.?track\b/i,
+  /\btrending\s*(service|package|spot|slot|offer|deal|bot)\b|\bvolume\s*bot\b|\b(kol|influencer)s?\s*(list|marketing|campaign|promo)\b|\bcall\s*channels?\b/i,
+  /\b(marketing|promotion|promo|advertis\w*|pr)\s*(service|package|team|agency|expert|offer|deal|plan|campaign)s?\b|\bpaid\s*(promo|promotion|post)\b/i,
+  /\b(i'?m|i am)\s*(a\s*)?(marketer|promoter|kol|influencer|crypto\s*marketer|community\s*manager|moderator for hire)\b/i,
+  /\b(partnership|collab\w*)\s*(offer|proposal|opportunity|request)\b/i,
+];
+const isMarketing = (t) => MARKETING.some((r) => r.test(t));
+const strikes = new Map(); // userId → { n, at } (memori saja)
+function strike(uid) {
+  const s = strikes.get(uid);
+  const n = s && Date.now() - s.at < 24 * 3600_000 ? s.n + 1 : 1;
+  strikes.set(uid, { n, at: Date.now() });
+  if (strikes.size > 20_000) strikes.clear();
+  return n;
+}
+// GUARD_CAPTCHA=0 mematikan tombol verifikasi anggota baru (bawaan: hidup, menyaring bot)
+const CAPTCHA = process.env.GUARD_CAPTCHA !== '0';
 const MUTE = { can_send_messages: false, can_send_audios: false, can_send_documents: false, can_send_photos: false, can_send_videos: false, can_send_video_notes: false, can_send_voice_notes: false, can_send_polls: false, can_send_other_messages: false, can_add_web_page_previews: false };
 
 async function onJoin(msg, user) {
   const chatId = msg.chat.id;
-  if (user.is_bot) return;
-  if (IMPOSTOR.test(nameOf(user)) || IMPOSTOR.test(user.username || '')) {
+  // bot hanya boleh masuk bila ditambahkan admin; bot yang masuk sendiri / dibawa member → keluarkan
+  if (user.is_bot) {
+    if (user.id === me?.id) return;
+    const byAdmin = msg.from && msg.from.id !== user.id && await isAdmin(chatId, msg.from.id);
+    if (!byAdmin) { await tg('banChatMember', { chat_id: chatId, user_id: user.id }); console.log('[guard] bot dikeluarkan', user.id, user.username); }
+    return;
+  }
+  if (looksImpostor(user)) {
     await tg('banChatMember', { chat_id: chatId, user_id: user.id });
     console.log('[guard] peniru diblokir', user.id, nameOf(user));
     return;
   }
-  if (!STRICT) {
+  if (!STRICT && !CAPTCHA) {
     await sayTemp(chatId, `Welcome, ${esc(nameOf(user))}. Ask me anything about GHOSTKEY. The official $GHOST address is always behind /ca, and admins never DM first.`, 120_000);
     return;
   }
@@ -164,7 +198,31 @@ async function onMessage(msg) {
   if (msg.chat.type === 'private') { if (shouldAnswer(msg, text)) await agentReply(msg, text); return; }
   const anonAdmin = msg.sender_chat?.id === chatId || (msg.is_automatic_forward && msg.sender_chat?.type === 'channel');
   if (anonAdmin || await isAdmin(chatId, from.id)) { remember(chatId, nameOf(from) + ' (admin)', text); if (shouldAnswer(msg, text) && (msg.reply_to_message?.from?.id === me?.id || text.toLowerCase().includes('@' + (me?.username || '').toLowerCase()))) await agentReply(msg, text); return; }
-  if (from.is_bot && from.username !== undefined) { /* bot lain lewat admin saja */ }
+  // bot lain (bukan admin, bukan kita) yang menulis di grup → hapus + keluarkan
+  if (from.is_bot && from.id !== me?.id) {
+    await tg('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
+    await tg('banChatMember', { chat_id: chatId, user_id: from.id });
+    console.log('[guard] bot penulis dikeluarkan', from.id, from.username);
+    return;
+  }
+  // nama menyamar (bisa diganti sesudah masuk) atau teks mengaku tim/agen GHOSTKEY → hapus + blokir
+  if (looksImpostor(from) || CLAIMS_TEAM.test(text)) {
+    await tg('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
+    await tg('banChatMember', { chat_id: chatId, user_id: from.id });
+    console.log('[guard] peniru/agen palsu diblokir', from.id, nameOf(from));
+    return sayTemp(chatId, `Removed an account pretending to be GHOSTKEY. The team only speaks here as admins, and never DMs first.`, 30_000);
+  }
+  // jasa marketing / listing / trending / ajakan DM → hapus; pelanggaran kedua dalam 24 jam → blokir
+  if (isMarketing(text)) {
+    await tg('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
+    const n = strike(from.id);
+    if (n >= 2) {
+      await tg('banChatMember', { chat_id: chatId, user_id: from.id });
+      console.log('[guard] spam marketing diblokir', from.id, nameOf(from));
+      return sayTemp(chatId, `${esc(nameOf(from))} was removed for repeated promo offers.`, 20_000);
+    }
+    return sayTemp(chatId, `${esc(nameOf(from))}, promo and "DM me" offers aren't allowed here. A second one gets you removed.`, 20_000);
+  }
 
   // pesan terusan dari kanal / akun lain = pola spam umum
   if (STRICT && (msg.forward_origin || msg.forward_from_chat)) {
