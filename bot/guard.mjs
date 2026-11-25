@@ -129,11 +129,13 @@ async function onJoin(msg, user) {
   if (looksImpostor(user)) {
     await tg('banChatMember', { chat_id: chatId, user_id: user.id });
     console.log('[guard] peniru diblokir', user.id, nameOf(user));
+    ownerNote(`🛡️ peniru (nama palsu GHOSTKEY) diblokir saat masuk: ${nameOf(user)}`);
     return;
   }
   if (SELLER_NAME.test(`${nameOf(user)} ${user.username || ''}`)) {
     await tg('banChatMember', { chat_id: chatId, user_id: user.id });
     console.log('[guard] penjual jasa ditolak saat masuk', user.id, nameOf(user));
+    ownerNote(`🛡️ penjual jasa ditolak saat masuk: ${nameOf(user)}`);
     return;
   }
   if (!STRICT && !CAPTCHA) {
@@ -224,7 +226,16 @@ async function onMessage(msg) {
       return say(msg, requestsDigest());
     }
   }
-  if (msg.chat.type === 'private') { if (shouldAnswer(msg, text)) await agentReply(msg, text); return; }
+  if (msg.chat.type === 'private') {
+    if (/^\/(start|owner|laporan)\b/i.test(text) && await isAdmin(ALERT_CHAT, from.id)) {
+      STATE.owners = [...new Set([...(STATE.owners || []), from.id])]; saveState();
+      await tg('sendMessage', { chat_id: chatId, text: 'Siap. Mulai sekarang laporan grup GHOSTKEY kukirim ke sini: usulan member yang bagus, setiap pembagian Ghost Credit, spam/penipu yang dihapus, dan kalau ada masalah. Ketik /diam untuk berhenti.' });
+      return;
+    }
+    if (/^\/diam\b/i.test(text)) { STATE.owners = (STATE.owners || []).filter((x) => x !== from.id); saveState(); await tg('sendMessage', { chat_id: chatId, text: 'Oke, laporan dihentikan. Ketik /laporan untuk menyalakan lagi.' }); return; }
+    if (shouldAnswer(msg, text)) await agentReply(msg, text);
+    return;
+  }
   const anonAdmin = msg.sender_chat?.id === chatId || (msg.is_automatic_forward && msg.sender_chat?.type === 'channel');
   if (anonAdmin || await isAdmin(chatId, from.id)) { remember(chatId, nameOf(from) + ' (admin)', text); if (shouldAnswer(msg, text) && (msg.reply_to_message?.from?.id === me?.id || text.toLowerCase().includes('@' + (me?.username || '').toLowerCase()))) await agentReply(msg, text); return; }
   // bot lain (bukan admin, bukan kita) yang menulis di grup → hapus + keluarkan
@@ -239,6 +250,7 @@ async function onMessage(msg) {
     await tg('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
     await tg('banChatMember', { chat_id: chatId, user_id: from.id });
     console.log('[guard] peniru/agen palsu diblokir', from.id, nameOf(from));
+    ownerNote(`🛡️ agen/admin palsu diblokir: ${nameOf(from)} — "${text.slice(0, 120)}"`);
     return sayTemp(chatId, `Removed an account pretending to be GHOSTKEY. The team only speaks here as admins, and never DMs first.`, 30_000);
   }
   // akun bernama penjual jasa yang menawarkan vote/boost/trending → hapus + blokir langsung
@@ -246,6 +258,7 @@ async function onMessage(msg) {
     await tg('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
     await tg('banChatMember', { chat_id: chatId, user_id: from.id });
     console.log('[guard] penjual jasa diblokir', from.id, nameOf(from));
+    ownerNote(`🛡️ penjual vote/boost diblokir: ${nameOf(from)} — "${text.slice(0, 120)}"`);
     return sayTemp(chatId, `Removed a seller offering paid votes or boosts. Bought votes aren't real holders.`, 20_000);
   }
   // jasa marketing / listing / trending / ajakan DM → hapus; pelanggaran kedua dalam 24 jam → blokir
@@ -255,6 +268,7 @@ async function onMessage(msg) {
     if (n >= 2) {
       await tg('banChatMember', { chat_id: chatId, user_id: from.id });
       console.log('[guard] spam marketing diblokir', from.id, nameOf(from));
+    ownerNote(`🛡️ spam promo diblokir (pelanggaran ke-2): ${nameOf(from)} — "${text.slice(0, 120)}"`);
       return sayTemp(chatId, `${esc(nameOf(from))} was removed for repeated promo offers.`, 20_000);
     }
     return sayTemp(chatId, `${esc(nameOf(from))}, promo and "DM me" offers aren't allowed here. A second one gets you removed.`, 20_000);
@@ -266,6 +280,7 @@ async function onMessage(msg) {
     if (strike(from.id) >= 2) {
       await tg('banChatMember', { chat_id: chatId, user_id: from.id });
       console.log('[guard] penerus promo diblokir', from.id, nameOf(from));
+    ownerNote(`🛡️ penerus promo diblokir (pelanggaran ke-2): ${nameOf(from)} — "${text.slice(0, 120)}"`);
       return sayTemp(chatId, `${esc(nameOf(from))} was removed for repeated forwarded promos.`, 20_000);
     }
     return sayTemp(chatId, `${esc(nameOf(from))}, forwarded posts aren't allowed here. A second one gets you removed.`, 20_000);
@@ -285,6 +300,7 @@ async function onMessage(msg) {
     return sayTemp(chatId, addrs.length ? `${esc(nameOf(from))}, I removed a contract address to keep fakes out. The real $GHOST address is behind /ca.` : `${esc(nameOf(from))}, I removed a link that looked like a scam. If it was legit, an admin can share it.`, 20_000);
   }
   remember(chatId, nameOf(from), text);
+  logChat(from, text);
   // usulan fitur (tanpa perintah): dinilai dulu; kalau memang usulan, bot menjawab sebagai penilai, bukan sebagai obrolan
   if (REQ_HINT.test(text) && text.length >= 12 && text.length <= 800 && await triage(msg, text, false)) return;
   if (shouldAnswer(msg, text)) await agentReply(msg, text);
@@ -296,6 +312,21 @@ const STATE_FILE = join(process.env.STATE_DIRECTORY || join(process.cwd(), 'data
 let STATE = { requests: [], roadmapVotes: {}, announced: null, nextN: 1, kitSent: [] };
 try { STATE = { ...STATE, ...JSON.parse(readFileSync(STATE_FILE, 'utf8')) }; } catch {}
 function saveState() { try { mkdirSync(dirname(STATE_FILE), { recursive: true }); writeFileSync(STATE_FILE, JSON.stringify(STATE, null, 1)); } catch (e) { console.warn('[state]', e.message); } }
+// ---------- laporan ke pemilik (DM) + catatan obrolan grup ----------
+let noteHour = { h: 0, n: 0 };
+async function ownerNote(text) {
+  const h = Math.floor(Date.now() / 3600_000); if (noteHour.h !== h) noteHour = { h, n: 0 };
+  if (++noteHour.n > 40) return;                                   // pagu 40 laporan / jam
+  for (const id of STATE.owners || []) await tg('sendMessage', { chat_id: id, text: String(text).slice(0, 3500), disable_web_page_preview: true });
+}
+const CHATLOG = join(dirname(STATE_FILE), 'chatlog.json');
+let chatlog = []; try { chatlog = JSON.parse(readFileSync(CHATLOG, 'utf8')); } catch {}
+function logChat(from, text) {
+  if (!text) return;
+  chatlog.push({ at: new Date().toISOString(), name: nameOf(from), user: from.username || null, text: text.slice(0, 600) });
+  if (chatlog.length > 800) chatlog = chatlog.slice(-800);
+  try { writeFileSync(CHATLOG, JSON.stringify(chatlog)); } catch {}
+}
 const normTitle = (t) => t.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
 const triageUser = new Map(); let triageHour = { h: 0, n: 0 };
 async function triage(msg, text, explicit) {
@@ -323,15 +354,17 @@ async function triage(msg, text, explicit) {
       await say(msg, `Good one, ${name}. Logged as request #${r.n}: "${esc(r.title)}". ${esc(v.reason)} The team reviews these, and when something ships it's posted here.`);
     }
     console.log('[request] bagus', r.n, r.title);
+    ownerNote(`💡 Usulan bagus #${r.n} dari ${who.name}: "${r.title}"\n\nPesan: ${text.slice(0, 300)}\n\nPenilaian: ${v.reason}\nSuara: ${r.voters.length}`);
     return true;
   }
   if (v.verdict === 'on_roadmap') {
     const k = v.match || v.title;
     const set = new Set(STATE.roadmapVotes[k] || []); set.add(uid); STATE.roadmapVotes[k] = [...set]; saveState();
     await say(msg, `${esc(v.reason)} I counted your vote for "${esc(k)}", ${name}.`);
+    ownerNote(`🔁 ${who.name} minta fitur yang sudah ada di roadmap: "${k}" (total ${STATE.roadmapVotes[k].length} suara)`);
     return true;
   }
-  if (v.verdict === 'conflicts_privacy') { await say(msg, `${esc(v.reason)} The privacy promise comes first, so this one won't be built.`); return true; }
+  if (v.verdict === 'conflicts_privacy') { ownerNote(`⛔ Usulan ditolak (melanggar privasi) dari ${who.name}: ${text.slice(0, 200)}`); await say(msg, `${esc(v.reason)} The privacy promise comes first, so this one won't be built.`); return true; }
   // permintaan pasar / samar: dijawab hanya bila lewat /request (supaya grup tidak berisik)
   if (explicit) { await say(msg, esc(v.reason)); return true; }
   return false;
@@ -593,6 +626,7 @@ async function creditAnnouncer() {
           ] } });
         last = h.hour; STATE.creditLast = last; saveState();
         console.log('[credit] diumumkan jam', h.hour);
+        ownerNote(`💰 Ghost Credit dibagikan: ${hourLabel(h.startsAt)}\n${money(h.distributedUsd)} ke ${h.entries} dompet holder (25% fee)${total != null ? `\nTotal sejauh ini: ${money(total)}` : ''}\nTx: ${SCAN}/tx/${h.txHash}\nSudah diumumkan di grup.`);
         await sleep(1500);
       }
     } catch (e) { console.warn('[credit]', e.message); }
