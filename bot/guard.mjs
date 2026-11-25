@@ -574,7 +574,8 @@ async function creditAnnouncer() {
     try {
       const list = await (await fetch(SITE_API + '/api/ledger?limit=6')).json();
       const posted = (Array.isArray(list) ? list : []).filter((h) => h.status === 'posted' && h.txHash).sort((a, b) => a.hour - b.hour);
-      if (last == null) { last = posted.length ? posted.at(-1).hour : 0; console.log('[credit] pengumuman mulai sesudah jam', last); }
+      // jam terakhir yang diumumkan disimpan di state.json → restart di tengah jam pembagian tidak melewatkan pengumuman
+      if (last == null) { last = STATE.creditLast ?? (posted.length ? posted.at(-1).hour : 0); STATE.creditLast = last; saveState(); console.log('[credit] pengumuman mulai sesudah jam', last); }
       for (const h of posted.filter((x) => x.hour > last)) {
         let total = null;
         try { total = (await (await fetch(SITE_API + '/api/stats')).json()).holderCreditPaidUsd; } catch {}
@@ -590,7 +591,7 @@ async function creditAnnouncer() {
             [{ text: 'Check my wallet', url: 'https://ghostkeyai.com/token#check' }, { text: 'This hour', url: `https://ghostkeyai.com/token#ledger` }],
             [{ text: 'Use my credit', url: 'https://ghostkeyai.com/app' }],
           ] } });
-        last = h.hour;
+        last = h.hour; STATE.creditLast = last; saveState();
         console.log('[credit] diumumkan jam', h.hour);
         await sleep(1500);
       }
