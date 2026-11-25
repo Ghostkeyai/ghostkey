@@ -1,0 +1,15 @@
+node_modules/
+data/
+.env
+.secrets/
+.DS_Store
+assets/kandidat/
+_arsip-db-uji/
+qa/
+prototipe/
+*.log
+launch-kit/
+docs/
+tools/deploy.sh
+tools/deploy-bot.sh
+.claude/

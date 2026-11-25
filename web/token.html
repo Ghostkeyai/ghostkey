@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$GHOST &amp; Ghost Credit · GHOSTKEY</title>
+<meta name="description" content="Hold $GHOST, get AI credit every hour. 25% of every $GHOST trading fee goes to holders, posted on-chain with a Merkle root you can verify from your browser.">
+<meta name="theme-color" content="#121413">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/chrome.css">
+<link rel="stylesheet" href="/css/pages.css">
+<style>
+  .contracts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 36px; }
+  @media (max-width: 960px) { .contracts { grid-template-columns: 1fr; } }
+  .ccard .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .ccard .addr-row { margin-top: 6px; }
+  .ccard .links { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
+  .ccard p { font-size: 14px; color: var(--dim); }
+  .ccard .wl { display: grid; gap: 12px; }
+  .ccard .wl .label { display: block; margin-bottom: 4px; }
+
+  .split { display: grid; grid-template-columns: 1fr 3fr; border: 1px solid var(--line); margin-top: 16px; }
+  .split > div { padding: 16px 18px; }
+  .split .h { background: #9ff0c814; border-right: 1px solid var(--line); }
+  .split b { display: block; font: 500 30px/1 var(--font-pixel-2); }
+  .split .h b { color: var(--mint); }
+  .split span { font-size: 13.5px; color: var(--dim); }
+  .bar25 { display: flex; height: 12px; margin-top: 14px; }
+  .bar25 i { background: var(--mint); }
+  .bar25 u { flex: 1; background: var(--bg-3); }
+
+  .elig { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 860px) { .elig { grid-template-columns: 1fr; } }
+  .formula { font: 400 14px/1.7 var(--font-mono); background: #0c0e0d; border: 1px solid var(--line); padding: 14px 16px; margin-top: 14px; color: var(--ink); overflow-x: auto; }
+  .formula .c { color: var(--faint); }
+  .ex-list { margin-top: 12px; display: grid; gap: 8px; }
+  .ex-list li { list-style: none; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .ex-list li:last-child { border-bottom: 0; }
+  .ex-list .mono { font-size: 12.5px; }
+
+  .ledger-tbl tr[data-hour] { cursor: pointer; }
+  .ledger-tbl tr.sel td { background: #9ff0c80c; }
+  .hour-detail { margin-top: 20px; }
+  .hd-grid { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); margin: 16px 0; }
+  .hd-grid > div { padding: 14px 16px; min-width: 0; }
+  .hd-grid > div + div { border-left: 1px solid var(--line); }
+  .hd-grid b { display: block; font: 500 22px/1.1 var(--font-pixel-2); margin-top: 8px; overflow-wrap: anywhere; }
+  @media (max-width: 760px) { .hd-grid { grid-template-columns: 1fr 1fr; } .hd-grid > div:nth-child(3) { border-left: 0; } .hd-grid > div:nth-child(n+3) { border-top: 1px solid var(--line); } }
+  .chain-links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; }
+  .chain-links a { font: 400 12.5px var(--font-mono); color: var(--dim); }
+  .chain-links a:hover { color: var(--mint); }
+
+  .check-form { display: flex; gap: 8px; max-width: 720px; }
+  .check-form .input { flex: 1; min-width: 0; }
+  .vres { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+  .vres .tag { height: auto; padding: 4px 6px; }
+  .vbtn { background: none; border: 1px solid #9ff0c855; color: var(--mint); font: 400 10px/1 var(--font-pixel); letter-spacing: .04em; text-transform: uppercase; padding: 7px 9px; cursor: pointer; white-space: nowrap; }
+  .vbtn:hover { background: #9ff0c814; }
+  .vbtn:disabled { opacity: .5; cursor: wait; }
+  .manual summary { cursor: pointer; font: 400 11px/1 var(--font-pixel); letter-spacing: .05em; text-transform: uppercase; color: var(--dim); padding: 4px 0; }
+  .manual .grid-2 { margin-top: 14px; }
+  @media (max-width: 640px) { .hide-m { display: none; } .check-form { flex-direction: column; } }
+</style>
+<meta property="og:title" content="$GHOST &amp; Ghost Credit · GHOSTKEY">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:image" content="/img/og.png">
+</head>
+<body>
+<header id="nav"></header>
+<main>
+  <section class="page-head">
+    <div class="wrap">
+      <div class="head-row">
+        <div>
+          <span class="kicker">$GHOST · Robinhood Chain</span>
+          <h1 class="h1">Hold $GHOST. <span class="px">Get AI credit every hour.</span></h1>
+          <p class="lead">Every $GHOST trade on Pons costs 3%: the 1% Pons fee plus a 2% creator tax, fixed at launch. Each hour we claim our part. 25% becomes AI credit for holders. 75% goes to the team.</p>
+        </div>
+        <div class="head-stats">
+          <div><b id="s-paid">—</b><span>Ghost Credit paid</span><a href="/api/stats" target="_blank" rel="noopener">/api/stats ↗</a></div>
+          <div><b id="s-hours">—</b><span>Hours posted</span><a href="/api/ledger" target="_blank" rel="noopener">/api/ledger ↗</a></div>
+        </div>
+      </div>
+
+      <div class="contracts">
+        <div class="panel ccard tick" id="c-token"></div>
+        <div class="panel ccard" id="c-ledger"></div>
+        <div class="panel ccard" id="c-wallets"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="how">
+    <div class="wrap">
+      <div class="sec-h"><div><h2>How Ghost Credit works</h2><p>Four steps, every hour. Each one leaves a record you can check.</p></div></div>
+      <ol class="steps">
+        <li><span data-pix="coin" data-size="20"></span><div class="n">01</div><h3>Trades pay a fee</h3><p>Every buy or sell of $GHOST on Pons pays 3%: Pons's 1% fee and a 2% creator tax. The 2% tax plus 0.7 points of the Pons fee come to our fee wallet in ETH.</p></li>
+        <li><span data-pix="clock" data-size="20"></span><div class="n">02</div><h3>We claim it hourly</h3><p>At the end of each hour our server claims that fee. Each claim is a public transaction.</p></li>
+        <li><span data-pix="ghost" data-size="20"></span><div class="n">03</div><h3>25% to holders</h3><p>The holder share is split by average balance over 4 readings: at :15, :30, :45 and :60.</p></li>
+        <li><span data-pix="link" data-size="20"></span><div class="n">04</div><h3>Posted on-chain</h3><p>We publish the full list as JSON and post its Merkle root to the GhostLedger contract.</p></li>
+      </ol>
+      <div class="split">
+        <div class="h"><b id="sh-holders">25%</b><span>to holders, as AI credit</span></div>
+        <div><b id="sh-team">75%</b><span>to the team wallet. We say this plainly: most of the fee funds the team.</span>
+          <div class="bar25" aria-hidden="true"><i id="sh-bar" style="width:25%"></i><u></u></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="rules">
+    <div class="wrap">
+      <div class="sec-h"><div><h2>Who gets a share</h2><p>One simple rule, the same for every wallet.</p></div></div>
+      <div class="elig">
+        <div class="panel">
+          <div class="panel-h">The rule</div>
+          <p class="body-p" id="rule-line">Hold an average of at least <b>100,000 $GHOST</b> over the hour's 4 readings.</p>
+          <div class="formula"><span class="c"># your share for one hour</span><br>credit = pool × your average ÷ sum of eligible averages</div>
+          <p class="hint" style="margin-top:12px">Rounded down to the micro-dollar. Leftover cents stay in the next hour's pool. Credit is added to your GHOSTKEY balance: sign in with the same wallet to use it.</p>
+        </div>
+        <div class="panel">
+          <div class="panel-h">Not counted</div>
+          <p class="body-p">These wallets hold $GHOST but never get a share, so they cannot dilute yours.</p>
+          <ul class="ex-list" id="ex-list"></ul>
+          <p class="hint" style="margin-top:12px">The exact list for each hour is inside that hour's JSON, under <code class="inline">excluded</code>.</p>
+        </div>
+      </div>
+      <ul class="limits" style="margin-top:16px">
+        <li><span><b>Ghost Credit is platform credit for AI, not money.</b> It depends on how much $GHOST is traded. Nothing here promises a price or profit.</span></li>
+        <li><span><b>The 2% creator tax is fixed.</b> Pons locks it when the token launches, so nobody can raise it later.</span></li>
+        <li><span><b>No trades, no credit.</b> An hour without fees is recorded as "no fees" and nothing is posted on-chain.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="sec" id="ledger">
+    <div class="wrap">
+      <div class="sec-h"><div><h2>Ledger</h2><p>Every hour, newest first. Click an hour to see every wallet paid and check any of them.</p></div><span class="meta" id="ledger-meta"></span></div>
+      <div id="ledger-body"><p class="loading-line">Loading the ledger</p></div>
+      <div class="hour-detail" id="hour-detail"></div>
+    </div>
+  </section>
+
+  <section class="sec" id="check">
+    <div class="wrap">
+      <div class="sec-h"><div><h2>Check any wallet</h2><p>No sign-in needed. See its balance, whether it qualifies, and every credit it got. Then verify each credit against the contract yourself.</p></div></div>
+      <form class="check-form" id="check-form">
+        <input class="input mono" id="check-in" placeholder="0x… wallet address" aria-label="Wallet address" autocomplete="off" spellcheck="false">
+        <button class="btn" type="submit">Check wallet</button>
+      </form>
+      <div id="check-out" style="margin-top:20px"></div>
+
+      <details class="manual panel" style="margin-top:24px">
+        <summary>Verify by hand: paste hour, wallet, credit and proof</summary>
+        <div class="grid-2">
+          <div class="field"><label for="v-hour">Hour number</label><input class="input mono" id="v-hour" placeholder="e.g. 494123"></div>
+          <div class="field"><label for="v-credit">Credit (micro-USD, integer)</label><input class="input mono" id="v-credit" placeholder="e.g. 1250000 = $1.25"></div>
+        </div>
+        <div class="field" style="margin-top:14px"><label for="v-wallet">Wallet</label><input class="input mono" id="v-wallet" placeholder="0x…"></div>
+        <div class="field" style="margin-top:14px"><label for="v-proof">Proof (JSON array of 0x… hashes)</label><textarea class="textarea mono" id="v-proof" placeholder='["0x…","0x…"]' style="min-height:80px"></textarea></div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px"><button class="btn small" id="v-run" type="button">Call verify() on-chain</button><span id="v-out"></span></div>
+      </details>
+    </div>
+  </section>
+
+  <section class="sec" id="recompute">
+    <div class="wrap">
+      <div class="sec-h"><div><h2>Recompute it yourself</h2><p>You do not have to trust this page either.</p></div></div>
+      <div class="grid-3">
+        <div class="panel"><span class="label">1 · Read the hour</span><p class="body-p" style="margin-top:10px">Download any hour's JSON. It lists the 4 blocks read, the fee claims, the excluded wallets and every share.</p><a class="proof-link" href="/api/ledger" target="_blank" rel="noopener" style="margin-top:14px">/api/ledger</a></div>
+        <div class="panel"><span class="label">2 · Re-read the chain</span><p class="body-p" style="margin-top:10px">Read each holder's balance at those 4 blocks on any Robinhood Chain node. Average them and apply the rule.</p><a class="proof-link" href="https://robinhoodchain.blockscout.com" target="_blank" rel="noopener" style="margin-top:14px">Blockscout</a></div>
+        <div class="panel"><span class="label">3 · Run our script</span><p class="body-p" style="margin-top:10px">The repo has a script that recomputes an hour from the chain and compares it with the posted root.</p><span id="gh-script" style="display:block;margin-top:14px"></span></div>
+      </div>
+    </div>
+  </section>
+</main>
+<footer id="foot"></footer>
+<script type="module" src="/js/token.js"></script>
+</body>
+</html>

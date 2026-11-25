@@ -1,0 +1,57 @@
+{
+  "rule": "leaf=keccak256(abi.encode(address,uint64,uint128)); sorted-pair nodes; leaves sorted by hash; odd node promoted",
+  "hour": 494000,
+  "leaves": [
+    {
+      "wallet": "0x76282B7b64D3abcfb2CE822430C95b3729717058",
+      "creditMicro": "1250000",
+      "leaf": "0xd847aaf52b3710f4d4d46707482baf3b1f2c87312840e6586f8b28e28f7f6040"
+    },
+    {
+      "wallet": "0x238B9433e3E83127dD782a4C61DA40926d7b9F40",
+      "creditMicro": "37",
+      "leaf": "0x718cefea24017118084671e049fcd20bc69fbe98a2799cf355d7de8efc4d3da5"
+    },
+    {
+      "wallet": "0x8514c5B2a93D39F83DDdbcd537Ad5E1f5b16BF5a",
+      "creditMicro": "999999999",
+      "leaf": "0x87ba5d8dc611c8001a4ebd2a1ebebb88bab97cafe0c52740b7bb7878971e3c5a"
+    },
+    {
+      "wallet": "0x57F011D5F6f1c7fbEBfC423802DEDcaf2852152b",
+      "creditMicro": "0",
+      "leaf": "0xb5603ee30df59babb32f455f39474ba00c404ce5d1f97b63b7332462b65c929f"
+    },
+    {
+      "wallet": "0x82E4603D84b87C6baE399E7C515f653E8db073Ef",
+      "creditMicro": "340282366920938463463374607431768211455",
+      "leaf": "0x76c16eb7f0cec0bcf7adaf6ee2842b43b7da8dfdd1f8a7fd5531de93061d386f"
+    }
+  ],
+  "root": "0x5272b884559ec45281f0ec1f0040e7f626d5da0abdd9ad5f0daeb9b9fbf41443",
+  "proofs": [
+    [
+      "0x93a97fa8b9ca2628830b87197604c53e37fbc3e5e5cef737b0d063b5910f524a"
+    ],
+    [
+      "0x76c16eb7f0cec0bcf7adaf6ee2842b43b7da8dfdd1f8a7fd5531de93061d386f",
+      "0x90a718e484bdceeef7ea529571def14d736bc577e7afe8b77470e1f1fbaa34e6",
+      "0xd847aaf52b3710f4d4d46707482baf3b1f2c87312840e6586f8b28e28f7f6040"
+    ],
+    [
+      "0xb5603ee30df59babb32f455f39474ba00c404ce5d1f97b63b7332462b65c929f",
+      "0xe32401dd3b5025945362cab3e38549f83e7803062f19616ecd15674bf684f402",
+      "0xd847aaf52b3710f4d4d46707482baf3b1f2c87312840e6586f8b28e28f7f6040"
+    ],
+    [
+      "0x87ba5d8dc611c8001a4ebd2a1ebebb88bab97cafe0c52740b7bb7878971e3c5a",
+      "0xe32401dd3b5025945362cab3e38549f83e7803062f19616ecd15674bf684f402",
+      "0xd847aaf52b3710f4d4d46707482baf3b1f2c87312840e6586f8b28e28f7f6040"
+    ],
+    [
+      "0x718cefea24017118084671e049fcd20bc69fbe98a2799cf355d7de8efc4d3da5",
+      "0x90a718e484bdceeef7ea529571def14d736bc577e7afe8b77470e1f1fbaa34e6",
+      "0xd847aaf52b3710f4d4d46707482baf3b1f2c87312840e6586f8b28e28f7f6040"
+    ]
+  ]
+}

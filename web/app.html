@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chat · GHOSTKEY</title>
+<meta name="description" content="Chat with 200+ AI models. Your wallet, IP and device are removed before your question leaves our server. Every answer shows its exact cost and what we sent.">
+<meta name="theme-color" content="#121413">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/chrome.css">
+<link rel="stylesheet" href="/css/pages.css">
+<style>
+  /* Tata letak aplikasi chat: sidebar percakapan + utas + penulis pesan */
+  body { height: 100vh; height: 100dvh; overflow: hidden; }
+  .shell { display: grid; grid-template-columns: 280px 1fr; height: calc(100dvh - var(--nav-h)); min-height: 0; }
+  .side { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: #101211; }
+  .side-top { padding: 16px; border-bottom: 1px solid var(--line); }
+  .side-top .btn { width: 100%; justify-content: center; }
+  .side .label { padding: 18px 16px 8px; display: flex; justify-content: space-between; }
+  .convs { flex: 1; overflow-y: auto; padding: 0 8px 8px; min-height: 0; }
+  .conv { display: block; width: 100%; text-align: left; background: none; border: 0; border-left: 2px solid transparent; padding: 10px 10px; cursor: pointer; color: var(--dim); }
+  .conv b { display: block; font-weight: 400; font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .conv span { font: 400 11.5px var(--font-mono); color: var(--faint); }
+  .conv:hover { background: #ffffff06; }
+  .conv.on { border-left-color: var(--mint); background: #9ff0c80d; }
+  .convs .none { padding: 14px 10px; font-size: 13.5px; color: var(--faint); }
+  .local-box { margin: 12px; padding: 14px; border: 1px solid var(--line); font-size: 13px; color: var(--dim); }
+  .local-box p { display: flex; gap: 10px; align-items: flex-start; }
+  .local-box .pix { color: var(--mint); margin-top: 3px; }
+  .local-box .row { display: flex; gap: 8px; margin-top: 12px; }
+  .local-box .row .btn { flex: 1; justify-content: center; }
+  .side-legal { padding: 0 16px 14px; font: 400 11px var(--font-mono); color: var(--faint); }
+  .side-legal a { color: var(--faint); }
+
+  .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); min-height: 60px; }
+  .model-btn { display: flex; align-items: center; gap: 10px; background: var(--bg-2); border: 1px solid var(--line-2); padding: 8px 12px; cursor: pointer; min-width: 0; max-width: 520px; text-align: left; }
+  .model-btn:hover { border-color: #9ff0c866; }
+  .model-btn .nm { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .model-btn .pr { font: 400 12px var(--font-mono); color: var(--dim); white-space: nowrap; }
+  .model-btn .car { color: var(--faint); font-size: 10px; }
+  .meter { margin-left: auto; display: flex; align-items: center; gap: 12px; flex: none; }
+  .meter .lbl { font: 400 10.5px/1 var(--font-pixel); letter-spacing: .05em; text-transform: uppercase; color: var(--dim); }
+  .meter .cells { display: flex; gap: 2px; }
+  .meter .cells i { width: 6px; height: 12px; background: var(--bg-3); }
+  .meter .cells i.on { background: var(--mint); }
+  .meter .bal { font: 500 18px/1 var(--font-pixel-2); color: var(--mint); }
+  .side-toggle { display: none; }
+  .meter .show-s { display: none; }
+
+  .thread-wrap { flex: 1; overflow-y: auto; min-height: 0; }
+  .thread { width: min(800px, 100% - 32px); margin: 0 auto; padding: 28px 0 24px; display: flex; flex-direction: column; gap: 26px; }
+  .msg.user { align-self: flex-end; max-width: 85%; }
+  .msg.user .bubble { background: var(--bg-3); border: 1px solid var(--line); padding: 11px 15px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; }
+  .msg.ai .who { display: flex; align-items: center; gap: 8px; font: 400 10.5px/1 var(--font-pixel); text-transform: uppercase; letter-spacing: .05em; color: var(--faint); margin-bottom: 10px; }
+  .msg.ai .who .pix { color: var(--mint); }
+  .msg.ai .body { font-size: 15.5px; line-height: 1.7; overflow-wrap: anywhere; }
+  .msg.ai .body > * + * { margin-top: 12px; }
+  .msg.ai .body h1, .msg.ai .body h2, .msg.ai .body h3 { font-weight: 500; font-size: 17px; }
+  .msg.ai .body ul, .msg.ai .body ol { padding-left: 22px; }
+  .msg.ai .body code { font: 13px var(--font-mono); background: #ffffff0d; padding: 1px 5px; }
+  .msg.ai .body pre { background: #0c0e0d; border: 1px solid var(--line); padding: 14px; overflow-x: auto; }
+  .msg.ai .body pre code { background: none; padding: 0; }
+  .msg.ai .body strong { font-weight: 600; }
+  .body.cursor::after { content: "▮"; color: var(--mint); animation: gk-blink 1s steps(2) infinite; margin-left: 2px; }
+  .body .stopnote { color: var(--faint); font-size: 13.5px; }
+
+  /* Struk per jawaban */
+  .rcpt { margin-top: 14px; border: 1px solid var(--line); background: #0f1110; font: 400 12.5px/1.5 var(--font-mono); color: var(--dim); }
+  .rcpt-math { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 10px 14px; }
+  .rcpt-math b { color: var(--ink); font-weight: 500; }
+  .rcpt-math .op { color: var(--faint); }
+  .rcpt-math .total { margin-left: auto; color: var(--mint); font-weight: 500; font-size: 13.5px; }
+  .rcpt-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 8px 14px; border-top: 1px dashed var(--line-2); }
+  .rcpt-foot .paid { color: var(--ink); }
+  .rcpt-foot .sent { margin-left: auto; background: none; border: 1px solid #9ff0c855; color: var(--mint); font: 400 10.5px/1 var(--font-pixel); letter-spacing: .04em; text-transform: uppercase; padding: 7px 10px; cursor: pointer; display: inline-flex; gap: 7px; align-items: center; }
+  .rcpt-foot .sent:hover { background: #9ff0c814; }
+  .rcpt .why { padding: 0 14px 10px; color: var(--faint); font-size: 12px; }
+  .mock-note { margin-top: 10px; font-size: 12.5px; color: var(--gold); }
+
+  .err { border: 1px solid #ff8a7a55; border-left: 4px solid var(--bad); padding: 14px 16px; font-size: 14.5px; }
+  .err .acts { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+
+  /* Keadaan kosong */
+  .hello { margin: auto; padding: 48px 0 16px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .hello .pix.big { color: var(--mint); image-rendering: pixelated; }
+  .hello h1 { font: 200 clamp(32px, 4vw, 46px)/1.1 var(--font-ui); letter-spacing: -.03em; }
+  .hello h1 .px { font-size: .92em; }
+  .hello p { color: var(--dim); max-width: 34em; font-size: 15px; }
+  .sugs { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px; max-width: 640px; }
+  .sugs button { background: var(--bg-2); border: 1px solid var(--line-2); padding: 10px 14px; color: var(--ink); cursor: pointer; font-size: 14px; text-align: left; }
+  .sugs button:hover { border-color: #9ff0c866; }
+  .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border: 1px solid var(--line); margin-top: 18px; text-align: left; max-width: 720px; width: 100%; }
+  .facts div { padding: 14px 16px; font-size: 13px; color: var(--dim); }
+  .facts div + div { border-left: 1px solid var(--line); }
+  .facts b { display: block; font: 400 10.5px/1 var(--font-pixel); letter-spacing: .05em; text-transform: uppercase; color: var(--mint); margin-bottom: 8px; }
+  .facts a { color: var(--dim); }
+
+  .composer { border-top: 1px solid var(--line); padding: 12px 16px 14px; }
+  .composer form { width: min(800px, 100%); margin: 0 auto; display: flex; gap: 8px; align-items: flex-end; background: var(--bg-2); border: 1px solid var(--line-2); padding: 8px; }
+  .composer form:focus-within { border-color: #9ff0c888; }
+  .composer textarea { flex: 1; background: none; border: 0; outline: none; resize: none; font: 400 15px/1.5 var(--font-ui); color: var(--ink); padding: 8px; max-height: 240px; min-height: 40px; }
+  .composer .btn { flex: none; }
+  .composer .under { width: min(800px, 100%); margin: 8px auto 0; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 12.5px; color: var(--faint); }
+  .composer .under a { color: var(--dim); }
+
+  /* Pemilih model */
+  .picker { position: fixed; inset: 0; z-index: 120; background: #080a09cc; display: none; align-items: flex-start; justify-content: center; padding: calc(var(--nav-h) + 12px) 16px 16px; }
+  .picker.open { display: flex; }
+  .picker-box { width: min(760px, 100%); max-height: calc(100dvh - var(--nav-h) - 28px); display: flex; flex-direction: column; background: var(--bg-2); border: 1px solid var(--line-2); }
+  .picker-head { padding: 16px; border-bottom: 1px solid var(--line); display: grid; gap: 12px; }
+  .picker-head .top { display: flex; gap: 8px; }
+  .picker-head .top .input { flex: 1; }
+  .mlist { overflow-y: auto; flex: 1; min-height: 0; }
+  .mrow { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 12px 16px; cursor: pointer; color: var(--ink); }
+  .mrow:hover { background: #ffffff06; }
+  .mrow.sel { background: #9ff0c80f; box-shadow: inset 3px 0 0 var(--mint); }
+  .mrow .n { font-size: 14.5px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-width: 0; }
+  .mrow .id { font: 400 12px var(--font-mono); color: var(--faint); overflow-wrap: anywhere; }
+  .mrow .p { font: 400 13px var(--font-mono); text-align: right; white-space: nowrap; grid-row: span 2; align-self: center; }
+  .mrow .p small { display: block; color: var(--faint); font-size: 11px; }
+  .picker-foot { padding: 10px 16px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--faint); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .picker-foot a { color: var(--dim); }
+
+  /* Laci "What we sent" */
+  .drawer-back { position: fixed; inset: 0; z-index: 130; background: #080a0999; display: none; }
+  .drawer-back.open { display: block; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 140; width: min(620px, 100%); background: var(--bg); border-left: 1px solid var(--line-2); transform: translateX(100%); transition: transform .22s ease; display: flex; flex-direction: column; }
+  .drawer.open { transform: none; }
+  .drawer-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 22px; border-bottom: 1px solid var(--line); }
+  .drawer-h h2 { font: 300 22px/1.2 var(--font-ui); }
+  .drawer-h p { color: var(--dim); font-size: 13.5px; margin-top: 6px; }
+  .drawer-b { overflow-y: auto; overflow-x: hidden; padding: 20px 22px 32px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; align-content: start; }
+  .drawer-b > * { min-width: 0; }
+  .drawer-b .json { max-height: none; font-size: 12px; }
+  .strip-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .strip-list span { display: inline-flex; gap: 6px; align-items: center; border: 1px solid #ff8a7a44; color: #e8b2aa; padding: 6px 8px; font: 400 12px var(--font-mono); }
+  .strip-list span .pix { color: var(--bad); }
+  .kept-list span { border-color: var(--line-2); color: var(--dim); }
+  .kept-list span .pix { color: var(--mint); }
+  .forced { border: 1px solid #9ff0c855; background: #9ff0c80a; padding: 14px 16px; font-size: 14px; }
+  .forced code { font: 12.5px var(--font-mono); color: var(--mint); overflow-wrap: anywhere; }
+  .drawer-b .links { display: flex; flex-wrap: wrap; gap: 10px 20px; }
+
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: 1fr; }
+    .side { position: fixed; top: var(--nav-h); left: 0; bottom: 0; width: min(300px, 86vw); z-index: 110; transform: translateX(-100%); transition: transform .2s; }
+    .shell.side-open .side { transform: none; box-shadow: 0 0 0 100vmax #080a09aa; }
+    .side-toggle { display: inline-grid; }
+    .model-btn .pr { display: none; }
+  }
+  @media (max-width: 560px) {
+    .bar { padding: 8px 10px; gap: 8px; }
+    .meter .cells { display: none; }
+    .meter .signin-lbl { display: none; }
+    .meter #m-signin { display: none; }
+    .facts { grid-template-columns: 1fr; }
+    .facts div + div { border-left: 0; border-top: 1px solid var(--line); }
+    .composer { padding: 8px 10px 10px; }
+    .rcpt-math .total { margin-left: 0; width: 100%; }
+    .rcpt-foot .sent { margin-left: 0; }
+    .hello { padding-top: 28px; }
+  }
+</style>
+<meta property="og:title" content="Chat · GHOSTKEY">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:image" content="/img/og.png">
+</head>
+<body>
+<header id="nav"></header>
+
+<div class="shell" id="shell">
+  <aside class="side" id="side" aria-label="Your chats">
+    <div class="side-top"><button class="btn small" id="new-chat" type="button">New chat</button></div>
+    <div class="label"><span>This browser</span><span id="conv-count" class="num"></span></div>
+    <div class="convs" id="convs"></div>
+    <div class="local-box">
+      <p><svg class="pix" viewBox="0 0 8 8" width="14" height="14" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M2 0h4v1H2zM1 1h1v2H1zM6 1h1v2H6zM0 3h8v4H0z"/><path fill="#101211" d="M3 4h2v2H3z"/></svg><span>Chats live only in this browser. Our server never stores your prompts or answers.</span></p>
+      <div class="row">
+        <button class="btn small ghost" id="export" type="button">Export</button>
+        <button class="btn small ghost" id="wipe" type="button">Wipe</button>
+      </div>
+    </div>
+    <div class="side-legal"><a href="/docs#terms">Terms</a> · <a href="/docs#privacy">Privacy</a> · <a href="/account#export">What we store</a></div>
+  </aside>
+
+  <section class="main">
+    <div class="bar">
+      <button class="icon-btn side-toggle" id="side-toggle" type="button" aria-label="Show chats"></button>
+      <button class="model-btn" id="model-btn" type="button" aria-haspopup="dialog">
+        <span class="tag zdr" title="Zero Data Retention: the provider keeps nothing after answering">ZDR</span>
+        <span class="nm" id="m-name">Loading models…</span>
+        <span class="pr" id="m-rate"></span>
+        <span class="car">▼</span>
+      </button>
+      <div class="meter" id="meter"></div>
+    </div>
+
+    <div class="thread-wrap" id="thread-wrap">
+      <div class="thread" id="thread"></div>
+    </div>
+
+    <div class="composer">
+      <form id="form" autocomplete="off">
+        <label class="sr" for="prompt">Message</label>
+        <textarea id="prompt" rows="1" placeholder="Ask anything."></textarea>
+        <button class="btn" id="send" type="submit">Send</button>
+      </form>
+      <div class="under">
+        <span>Your wallet, IP and device are removed before this leaves our server.</span>
+        <a href="/privacy#inspector">See exactly what we send ↗</a>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- Pemilih model -->
+<div class="picker" id="picker" role="dialog" aria-modal="true" aria-label="Choose a model">
+  <div class="picker-box">
+    <div class="picker-head">
+      <div class="top">
+        <input class="input" id="m-search" type="search" placeholder="Search 200+ models: gpt, claude, llama…" aria-label="Search models">
+        <button class="btn small ghost" id="m-close" type="button">Close</button>
+      </div>
+      <div class="chips" id="m-labs"></div>
+    </div>
+    <div class="mlist" id="m-list"></div>
+    <div class="picker-foot">
+      <span>Prices per 1M tokens, same as OpenRouter. Every model has a zero-retention provider.</span>
+      <a href="/models">Full table + compare ↗</a>
+    </div>
+  </div>
+</div>
+
+<!-- Laci: apa yang dikirim ke OpenRouter -->
+<div class="drawer-back" id="drawer-back"></div>
+<aside class="drawer" id="drawer" aria-label="What we sent" aria-hidden="true">
+  <div class="drawer-h">
+    <div><h2>What we sent to OpenRouter</h2><p>This is the exact request that left our server for this answer. Only our shared key is hidden.</p></div>
+    <button class="icon-btn" id="drawer-x" type="button" aria-label="Close"></button>
+  </div>
+  <div class="drawer-b" id="drawer-b"></div>
+</aside>
+
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

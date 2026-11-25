@@ -1,0 +1,44 @@
+# GHOSTKEY
+
+> GHOSTKEY lets you use 200+ AI chat models through OpenRouter with one wallet, one balance and one API key. Before a request leaves our server, we remove your wallet, IP and device, and we only send it to providers on OpenRouter's public Zero Data Retention list. You pay what OpenRouter charges for each call. No markup, no top-up fee. 25% of every $GHOST creator fee becomes AI credit for holders ("Ghost Credit"), every hour.
+
+Chain: Robinhood Chain (chain id 4663). Explorer: https://robinhoodchain.blockscout.com
+
+## Pages
+- [Home](https://ghostkeyai.com/): what GHOSTKEY is, with a chat box (10 free messages, no wallet needed)
+- [Chat](https://ghostkeyai.com/app): the chat app
+- [Models](https://ghostkeyai.com/models): every model with a zero-retention provider, with OpenRouter prices
+- [Privacy](https://ghostkeyai.com/privacy): what we remove and the live request inspector
+- [$GHOST](https://ghostkeyai.com/token): Ghost Credit, the hourly ledger, and a wallet checker
+- [Proof](https://ghostkeyai.com/proof): every claim next to a way to check it (works without JavaScript)
+- [Docs](https://ghostkeyai.com/docs): API guide
+
+## How it works
+- Privacy: every request to OpenRouter is built in one function (server/privacy.mjs). It uses GHOSTKEY's shared key and fixed headers. Client IP, user agent, cookies, wallet, account id and the `user`, `metadata` and `provider` fields are never forwarded. Every request forces `provider: { zdr: true, data_collection: "deny" }`.
+- Storage: the database keeps model name, token counts, cost and time per call. There is no column for prompts or answers. Signed-in users can download everything stored about them at /api/me/export.
+- Price: the amount billed per call is the `usage.cost` OpenRouter returns for that call. Each answer ends with a receipt that shows tokens, rates, cost and the exact (redacted) request we forwarded.
+- Top-ups: USDG or ETH on Robinhood Chain to the treasury address, credited 1:1 in USD. Fee 0%.
+- Ghost Credit: each hour the server claims the $GHOST creator fee from Pons. 25% goes to the treasury as the holder pool and 75% to the owner wallet. Holders with an average of at least the minimum $GHOST over four snapshots (:15, :30, :45, :60) get a pro-rata share as AI balance. Each hour is published as JSON and its Merkle root is posted to the GhostLedger contract.
+
+## API (OpenAI-compatible)
+- Base URL: https://ghostkeyai.com/v1
+- Auth: `Authorization: Bearer gk_live_...` (create a key at /account after signing in with a wallet)
+- `POST /v1/chat/completions` (stream or not). Non-stream responses include a `ghostkey_receipt` field. Streams end with a chunk that carries `ghostkey_receipt`.
+- `GET /v1/models`
+- New accounts get 10 free calls on budget models.
+
+## Public JSON (no login)
+- [Config](https://ghostkeyai.com/api/config)
+- [Models](https://ghostkeyai.com/api/models)
+- [Stats](https://ghostkeyai.com/api/stats): numbers read from the database
+- [Ledger](https://ghostkeyai.com/api/ledger): latest Ghost Credit hours; `/api/ledger/<hour>` for one hour, `/api/ledger/<hour>/raw` for its exact bytes
+- [Holder](https://ghostkeyai.com/api/holder/0x0000000000000000000000000000000000000000): credits and Merkle proofs for a wallet
+- [Proof](https://ghostkeyai.com/api/proof): contract and wallet addresses with explorer links
+- `POST /api/inspect` with an OpenAI-style body: shows the exact request GHOSTKEY would send, without calling a model
+
+## Limits
+- Privacy covers who you are, not what you write. The model still reads your question to answer it.
+- Zero Data Retention is the provider's policy, listed publicly by OpenRouter. OpenRouter screens for illegal content as the law requires.
+- Your balance is held by GHOSTKEY's server as prepaid credit. It is not a token in your wallet.
+- We keep your wallet address because top-ups and Ghost Credit need it.
+- Ghost Credit is platform credit for AI, not money. It depends on how much $GHOST is traded. Nothing here promises a price or profit.

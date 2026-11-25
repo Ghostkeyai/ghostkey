@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Not found · GHOSTKEY</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#121413">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/chrome.css">
+<link rel="stylesheet" href="/css/pages.css">
+<style>
+  .lost { min-height: calc(100vh - var(--nav-h) - 260px); display: flex; align-items: center; padding: 72px 0; }
+  .lost .wrap { display: grid; grid-template-columns: auto 1fr; gap: 56px; align-items: center; }
+  .lost .ghost { color: var(--mint); animation: float 3.2s steps(8) infinite; }
+  @keyframes float { 50% { transform: translateY(-10px); } }
+  .lost .code404 { font: 500 clamp(72px, 12vw, 140px)/0.9 var(--font-pixel-2); color: var(--ink); letter-spacing: -.02em; }
+  .lost p { color: var(--dim); font-size: 17px; margin-top: 16px; max-width: 30em; }
+  .lost .go { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 28px; }
+  @media (max-width: 640px) { .lost .wrap { grid-template-columns: 1fr; gap: 28px; } }
+</style>
+<meta property="og:title" content="Not found · GHOSTKEY">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:image" content="/img/og.png">
+</head>
+<body>
+<header id="nav"></header>
+<main class="lost">
+  <div class="wrap">
+    <div class="ghost" id="ghost"></div>
+    <div>
+      <span class="kicker">Error 404</span>
+      <div class="code404" style="margin-top:18px">Nothing here.</div>
+      <p>This page floated away, or it never existed.</p>
+      <div class="go"><a class="btn" href="/app">Open chat</a><a class="btn ghost" href="/">Home</a><a class="btn ghost" href="/docs">Docs</a></div>
+    </div>
+  </div>
+</main>
+<footer id="foot"></footer>
+<script type="module">
+  import { chrome, pix } from '/js/common.js';
+  document.getElementById('ghost').innerHTML = pix('ghost', 160);
+  chrome();
+</script>
+</body>
+</html>

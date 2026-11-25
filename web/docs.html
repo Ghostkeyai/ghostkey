@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Docs · GHOSTKEY</title>
+<meta name="description" content="GHOSTKEY is OpenAI-compatible. Change the base URL, keep your code. Endpoints, billing, limits, privacy, terms and privacy policy in plain language.">
+<meta name="theme-color" content="#121413">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/chrome.css">
+<link rel="stylesheet" href="/css/pages.css">
+<style>
+  .doc { min-width: 0; }
+  .doc section { padding: 8px 0 48px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .doc section:last-child { border-bottom: 0; }
+  .doc h2 { font: 300 clamp(26px, 3vw, 34px)/1.15 var(--font-ui); letter-spacing: -.02em; margin-bottom: 14px; }
+  .doc h3 { font: 400 18px/1.3 var(--font-ui); margin: 26px 0 10px; }
+  .doc p, .doc li { color: var(--dim); font-size: 15.5px; }
+  .doc p + p { margin-top: 10px; }
+  .doc p b, .doc li b { color: var(--ink); font-weight: 500; }
+  .doc ul.plain, .doc ol.plain { padding-left: 22px; display: grid; gap: 8px; margin-top: 10px; }
+  .doc .code { margin-top: 14px; }
+  .doc .table { margin-top: 12px; }
+  .doc .table td { font-size: 14px; color: var(--dim); }
+  .doc .table td:first-child { color: var(--ink); }
+  .tabs { margin-top: 16px; }
+  .updated { font: 400 12px var(--font-mono); color: var(--faint); margin-bottom: 10px; }
+  .callout { margin-top: 16px; }
+</style>
+<meta property="og:title" content="Docs · GHOSTKEY">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:image" content="/img/og.png">
+</head>
+<body>
+<header id="nav"></header>
+<main>
+  <section class="page-head">
+    <div class="wrap">
+      <span class="kicker">Docs</span>
+      <h1 class="h1">Change one line. <span class="px">Keep your code.</span></h1>
+      <p class="lead">GHOSTKEY speaks the OpenAI API. Point any OpenAI SDK at our base URL, use your GHOSTKEY key, and pick from <span data-count>200+</span> models.</p>
+    </div>
+  </section>
+  <section class="sec">
+    <div class="wrap side-layout">
+      <nav class="side-nav" id="toc" aria-label="On this page">
+        <a href="#quickstart">Quickstart</a><a href="#auth">API keys</a><a href="#endpoints">Endpoints</a><a href="#models">Models</a>
+        <a href="#billing">Billing</a><a href="#limits">Limits</a><a href="#errors">Errors</a><a href="#privacy-how">Privacy</a>
+        <a href="#ghost-credit">Ghost Credit</a><a href="#terms">Terms</a><a href="#privacy">Privacy policy</a>
+      </nav>
+      <div class="doc">
+        <section id="quickstart">
+          <h2>Quickstart</h2>
+          <p>1. <a class="link" href="/account#keys">Create an API key</a>. Signing in with a wallet is free. 2. Set the base URL to <code class="inline" data-base></code>. 3. Use any model id from the <a class="link" href="/models">models page</a>.</p>
+          <div class="seg tabs" id="tabs"><button type="button" data-t="curl" aria-pressed="true">curl</button><button type="button" data-t="py" aria-pressed="false">Python</button><button type="button" data-t="js" aria-pressed="false">JavaScript</button></div>
+          <div class="code"><pre id="ex"></pre><button class="cp" type="button" data-cp="#ex">Copy</button></div>
+          <p class="hint" style="margin-top:10px">Streaming works the same way: add <code class="inline">"stream": true</code>. The last streamed chunk has an empty <code class="inline">choices</code> list and a <code class="inline">ghostkey_receipt</code> object: tokens, rates, exact cost and the request we forwarded. Non-streaming answers carry the same <code class="inline">ghostkey_receipt</code> field.</p>
+        </section>
+
+        <section id="auth">
+          <h2>API keys</h2>
+          <p>Send your key as a Bearer token: <code class="inline">Authorization: Bearer gk_live_…</code>. Keys start with <code class="inline">gk_live_</code>.</p>
+          <p>We show a key once, when you create it. We keep only a hash and the first characters, so we cannot show it again. Lost a key? Create a new one on your <a class="link" href="/account#keys">account page</a>.</p>
+          <p>Every key bills the balance of the wallet that made it. A new account gets <b data-free>10</b> free calls on low-cost models, so you can test before you top up.</p>
+        </section>
+
+        <section id="endpoints">
+          <h2>Endpoints</h2>
+          <div class="table-scroll"><table class="table"><thead><tr><th>Method</th><th>Path</th><th>What it does</th></tr></thead><tbody>
+            <tr><td class="mono">POST</td><td class="mono">/v1/chat/completions</td><td>OpenAI-compatible chat. Needs an API key. Stream or not.</td></tr>
+            <tr><td class="mono">GET</td><td class="mono"><a class="link" href="/v1/models" target="_blank" rel="noopener">/v1/models</a></td><td>Every model you can call, OpenAI format.</td></tr>
+            <tr><td class="mono">GET</td><td class="mono"><a class="link" href="/api/models" target="_blank" rel="noopener">/api/models</a></td><td>Same list with prices per 1M tokens and zero-retention providers.</td></tr>
+            <tr><td class="mono">POST</td><td class="mono">/api/inspect</td><td>Shows what we would send to OpenRouter for a request. Free, calls no model. <a class="link" href="/privacy#inspector">Try it</a>.</td></tr>
+            <tr><td class="mono">GET</td><td class="mono"><a class="link" href="/api/stats" target="_blank" rel="noopener">/api/stats</a></td><td>Public totals: messages, tokens, accounts, Ghost Credit paid.</td></tr>
+            <tr><td class="mono">GET</td><td class="mono"><a class="link" href="/api/ledger" target="_blank" rel="noopener">/api/ledger</a></td><td>Ghost Credit per hour, with Merkle roots and transactions.</td></tr>
+            <tr><td class="mono">GET</td><td class="mono">/api/ledger/{hour}/raw</td><td>The exact hour file. Its keccak256 hash is the <code class="inline">uriHash</code> posted on-chain.</td></tr>
+            <tr><td class="mono">GET</td><td class="mono">/api/holder/{wallet}</td><td>A wallet's $GHOST balance and every credit it got, with proofs.</td></tr>
+            <tr><td class="mono">GET</td><td class="mono"><a class="link" href="/api/config" target="_blank" rel="noopener">/api/config</a></td><td>Public addresses and settings: treasury, token, ledger, limits.</td></tr>
+          </tbody></table></div>
+          <h3>Request fields we pass on</h3>
+          <p><code class="inline">model</code>, <code class="inline">messages</code>, <code class="inline">stream</code>, <code class="inline">max_tokens</code>, <code class="inline">temperature</code>, <code class="inline">top_p</code>, <code class="inline">stop</code>, <code class="inline">tools</code>, <code class="inline">tool_choice</code>, <code class="inline">response_format</code>, <code class="inline">seed</code>, <code class="inline">presence_penalty</code>, <code class="inline">frequency_penalty</code>.</p>
+          <p>We drop <code class="inline">user</code>, <code class="inline">metadata</code> and <code class="inline">provider</code>. We always set our own provider rule. See <a class="link" href="#privacy-how">Privacy</a>.</p>
+        </section>
+
+        <section id="models">
+          <h2>Models</h2>
+          <p>Model ids are the same as on OpenRouter, like <code class="inline">openai/gpt-4o-mini</code> or <code class="inline">anthropic/claude-sonnet-4</code>. We list only models with at least one Zero Data Retention provider.</p>
+          <p>Prices are OpenRouter's prices, per 1 million tokens. <a class="link" href="/models#compare">Compare them with OpenRouter</a> from your browser.</p>
+        </section>
+
+        <section id="billing">
+          <h2>Billing</h2>
+          <p><b>Prepaid.</b> You add balance with ETH or USDG on Robinhood Chain. The top-up fee is 0%. One dollar paid is one dollar of credit.</p>
+          <p><b>Hold, then settle.</b> When a call starts, we hold the most it could cost (your <code class="inline">max_tokens</code> at the model's price). When it ends, we charge the exact cost OpenRouter reports for that call and release the rest. If the call fails, the hold is released in full.</p>
+          <p><b>No markup.</b> The amount billed is the cost OpenRouter reports in <code class="inline">usage.cost</code>. Every chat answer shows it, and your <a class="link" href="/account#usage">usage table</a> lists every call.</p>
+          <p><b>Balance is not a token.</b> It is prepaid AI credit held by GHOSTKEY's server. It cannot be traded or withdrawn.</p>
+        </section>
+
+        <section id="limits">
+          <h2>Limits</h2>
+          <div class="table-scroll"><table class="table"><tbody>
+            <tr><td>Free messages in web chat, no wallet</td><td class="num" data-cfg="freeMessages">10 per browser</td></tr>
+            <tr><td>Free API calls for a new account</td><td class="num" data-cfg="freeMessages2">10 calls</td></tr>
+            <tr><td>Models allowed for free messages</td><td>Low-cost models, marked “Free OK”</td></tr>
+            <tr><td>Top-up range</td><td class="num" data-cfg="deposit">$5 to $2,000 per payment</td></tr>
+            <tr><td>Rate limits</td><td>Fair use. Very fast bursts are slowed with HTTP 429.</td></tr>
+          </tbody></table></div>
+          <p style="margin-top:12px">Free messages pause for the day if the site-wide free budget runs out. Paid calls are not affected.</p>
+        </section>
+
+        <section id="errors">
+          <h2>Errors</h2>
+          <p>Errors use the OpenAI shape: <code class="inline">{"error": {"message": "…", "code": "…"}}</code>.</p>
+          <div class="table-scroll"><table class="table"><thead><tr><th>HTTP</th><th>Code</th><th>Meaning</th></tr></thead><tbody>
+            <tr><td class="mono">401</td><td class="mono">invalid_api_key</td><td>Key missing, wrong or replaced.</td></tr>
+            <tr><td class="mono">402</td><td class="mono">insufficient_balance</td><td>Balance too low for this call. Add balance or lower max_tokens.</td></tr>
+            <tr><td class="mono">402</td><td class="mono">model_needs_balance</td><td>Free calls work only on low-cost models.</td></tr>
+            <tr><td class="mono">400</td><td class="mono">bad_model</td><td>Unknown model id, or no zero-retention provider for it right now.</td></tr>
+            <tr><td class="mono">400</td><td class="mono">bad_messages</td><td>The messages array is missing or malformed.</td></tr>
+            <tr><td class="mono">429</td><td class="mono">slow_down</td><td>Too many requests. Wait a moment.</td></tr>
+            <tr><td class="mono">502</td><td class="mono">upstream_error</td><td>The model provider failed. You are not charged.</td></tr>
+          </tbody></table></div>
+        </section>
+
+        <section id="privacy-how">
+          <h2>Privacy</h2>
+          <p>Every request goes to OpenRouter with GHOSTKEY's own key, shared by all users. We remove your IP address, device, cookies, wallet address, account ID and the <code class="inline">user</code> field.</p>
+          <p>We add <code class="inline">provider: {"zdr": true, "data_collection": "deny"}</code> to every request. Zero Data Retention means the provider keeps nothing after answering. OpenRouter publishes the <a class="link" href="https://openrouter.ai/api/v1/endpoints/zdr" target="_blank" rel="noopener">list of ZDR providers</a>.</p>
+          <p>See it for yourself in the <a class="link" href="/privacy#inspector">inspector</a>, or call <code class="inline">POST /api/inspect</code> with your own request.</p>
+        </section>
+
+        <section id="ghost-credit">
+          <h2>Ghost Credit</h2>
+          <p>Each $GHOST trade on Pons costs 3%: the 1% Pons fee plus a 2% creator tax, locked at launch. The creator tax and 0.7 points of the Pons fee are the creator fee. Each hour we claim it: <b data-share>25%</b> becomes AI credit for holders, split by average balance. The rest goes to the team. Each hour's split is posted on-chain as a Merkle root.</p>
+          <p>Ghost Credit lands in your GHOSTKEY balance and works for chat and the API. <a class="link" href="/token">Read how it works and check any wallet</a>.</p>
+        </section>
+
+        <section id="terms">
+          <h2>Terms of use</h2>
+          <p class="updated">Plain-language summary · last updated 25 Nov 2026</p>
+          <ol class="plain">
+            <li><b>What we do.</b> GHOSTKEY forwards your requests to AI models through OpenRouter and bills you what OpenRouter charges.</li>
+            <li><b>Your balance.</b> It is prepaid credit for AI use on GHOSTKEY. It is not a deposit, an investment or a token. It cannot be withdrawn or traded.</li>
+            <li><b>Your content.</b> You own what you write and what the models answer. You are responsible for how you use it.</li>
+            <li><b>Fair use.</b> Follow the law and the rules of OpenRouter and the model providers. We may slow or block accounts that abuse the service.</li>
+            <li><b>Models change.</b> Providers can change prices or remove models. Prices follow OpenRouter at the time of each call.</li>
+            <li><b>No guarantees.</b> The service is offered as it is. AI answers can be wrong. We do not promise uptime.</li>
+            <li><b>$GHOST and Ghost Credit.</b> $GHOST is not an investment. Ghost Credit is AI credit on GHOSTKEY, not money, and depends on trading volume. We promise no price or profit.</li>
+            <li><b>Changes.</b> We may update these terms. The date above changes when we do.</li>
+          </ol>
+        </section>
+
+        <section id="privacy">
+          <h2>Privacy policy</h2>
+          <p class="updated">Plain-language summary · last updated 25 Nov 2026</p>
+          <h3>What we store</h3>
+          <ul class="plain">
+            <li><b>Your wallet address</b>, once you sign in. Top-ups and Ghost Credit need it.</li>
+            <li><b>Your balance</b>, your top-up transactions and your Ghost Credit rows.</li>
+            <li><b>Usage rows</b>: model, tokens in and out, cost, time, and whether it came from chat or the API.</li>
+            <li><b>API keys</b>: a hash and the first characters, never the full key.</li>
+            <li><b>A random browser ID</b> stored in your browser, to count your free messages.</li>
+          </ul>
+          <h3>What we never store</h3>
+          <ul class="plain">
+            <li>Your prompts and the answers. Chat history lives only in your browser.</li>
+            <li>Your IP address and your device. To limit free messages, we count requests per IP per day using a scrambled code (a hash with a secret that changes every time the server restarts). These counts are deleted within 2 days.</li>
+          </ul>
+          <h3>Who else sees your request</h3>
+          <p>OpenRouter and the zero-retention provider that answers. They see the request text but not who sent it. OpenRouter screens content as the law requires.</p>
+          <h3>Your rights</h3>
+          <p>Download everything we store about your wallet at any time from <a class="link" href="/account#export">your account</a>. To delete your account data, contact us on <span data-contact>X</span>.</p>
+        </section>
+      </div>
+    </div>
+  </section>
+</main>
+<footer id="foot"></footer>
+<script type="module" src="/js/docs.js"></script>
+</body>
+</html>

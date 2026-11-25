@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy inspector · GHOSTKEY</title>
+<meta name="description" content="See exactly what GHOSTKEY sends to OpenRouter. Your wallet, IP and device are removed, and every request is forced to zero-retention providers.">
+<meta name="theme-color" content="#121413">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/chrome.css">
+<link rel="stylesheet" href="/css/pages.css">
+<style>
+  .flow { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); margin-top: 36px; }
+  .flow > div { padding: 20px; position: relative; }
+  .flow > div + div { border-left: 1px solid var(--line); }
+  .flow > div + div::before { content: ""; position: absolute; left: -7px; top: 26px; width: 12px; height: 12px; background: var(--bg); border: 1px solid var(--line-2); transform: rotate(45deg); }
+  .flow .who { font: 400 11px/1 var(--font-pixel); text-transform: uppercase; letter-spacing: .05em; color: var(--mint); display: flex; gap: 8px; align-items: center; }
+  .flow p { font-size: 14px; color: var(--dim); margin-top: 10px; }
+  .flow p b { color: var(--ink); font-weight: 500; }
+  @media (max-width: 860px) { .flow { grid-template-columns: 1fr 1fr; } .flow > div:nth-child(3) { border-left: 0; } .flow > div:nth-child(n+3) { border-top: 1px solid var(--line); } .flow > div::before { display: none; } }
+  @media (max-width: 520px) { .flow { grid-template-columns: 1fr; } .flow > div + div { border-left: 0; border-top: 1px solid var(--line); } }
+
+  .three .panel .ilist { margin-top: 14px; }
+  .three .panel .proof-link { margin-top: 16px; }
+  .zdr-line { margin-top: 16px; padding: 18px 20px; border: 1px solid #9ff0c855; background: #9ff0c80a; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+  .zdr-line p { font-size: 15.5px; max-width: 46em; }
+  .zdr-line b { color: var(--mint); font-weight: 500; }
+
+  .insp-in { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; }
+  @media (max-width: 860px) { .insp-in { grid-template-columns: minmax(0, 1fr); } }
+  .insp-in .textarea { min-height: 260px; font: 400 13px/1.6 var(--font-mono); }
+  .insp-side { display: flex; flex-direction: column; gap: 12px; }
+  .insp-side .btn { justify-content: center; }
+  .sides { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-top: 24px; }
+  .sides > div { min-width: 0; }
+  @media (max-width: 960px) { .sides { grid-template-columns: minmax(0, 1fr); } }
+  .side-h { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .side-h h3 { font: 400 17px/1.3 var(--font-ui); display: flex; gap: 10px; align-items: center; }
+  .side-h .label { color: var(--faint); }
+  .sides .json { max-height: 560px; font-size: 12px; }
+  .sub-h { font: 400 10.5px/1 var(--font-pixel); text-transform: uppercase; letter-spacing: .05em; color: var(--faint); margin: 14px 0 8px; }
+  .diff-sum { margin-top: 18px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border: 1px solid var(--line); }
+  .diff-sum > div { padding: 16px; font-size: 14px; color: var(--dim); }
+  .diff-sum > div + div { border-left: 1px solid var(--line); }
+  .diff-sum b { display: block; font: 500 26px/1 var(--font-pixel-2); margin-bottom: 8px; }
+  .diff-sum .rm b { color: var(--bad); }
+  .diff-sum .ad b { color: var(--mint); }
+  @media (max-width: 640px) { .diff-sum { grid-template-columns: 1fr; } .diff-sum > div + div { border-left: 0; border-top: 1px solid var(--line); } }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--dim); margin-top: 14px; }
+  .legend i { display: inline-block; width: 12px; height: 12px; vertical-align: -2px; margin-right: 6px; }
+  .legend .l-rm { background: #ff8a7a33; outline: 1px solid #ff8a7a88; }
+  .legend .l-hl { background: #9ff0c833; outline: 1px solid #9ff0c888; }
+</style>
+<meta property="og:title" content="Privacy inspector · GHOSTKEY">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:image" content="/img/og.png">
+</head>
+<body>
+<header id="nav"></header>
+<main>
+  <section class="page-head">
+    <div class="wrap">
+      <span class="kicker">Privacy</span>
+      <h1 class="h1">What leaves our server. <span class="px">And what doesn't.</span></h1>
+      <p class="lead">Before your question goes to the model, we take off your wallet, IP and device. Then we send it only to providers that keep nothing. You can check every step below.</p>
+
+      <div class="flow">
+        <div><span class="who" data-pix="chat">You</span><p>You ask a question in the chat or through the API.</p></div>
+        <div><span class="who" data-pix="shield">GHOSTKEY</span><p>We <b>remove</b> your wallet, IP, device and cookies. We <b>add</b> one rule: zero-retention providers only.</p></div>
+        <div><span class="who" data-pix="key">OpenRouter</span><p>Gets the question with our <b>shared key</b>. It cannot tell which user sent it.</p></div>
+        <div><span class="who" data-pix="ghost">Provider</span><p>Answers, then <b>keeps nothing</b>. Only providers on OpenRouter's public ZDR list can answer.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="wrap">
+      <div class="grid-3 three">
+        <div class="panel">
+          <div class="panel-h">Removed</div>
+          <p class="body-p">Never sent to OpenRouter or the model.</p>
+          <ul class="ilist no" id="removed-list">
+            <li><span data-pix="cross"></span><span>Your IP address</span></li>
+            <li><span data-pix="cross"></span><span>Your device (user agent)</span></li>
+            <li><span data-pix="cross"></span><span>Cookies and your session</span></li>
+            <li><span data-pix="cross"></span><span>Your wallet address</span></li>
+            <li><span data-pix="cross"></span><span>Your account ID</span></li>
+            <li><span data-pix="cross"></span><span>The <code class="inline">user</code> and <code class="inline">metadata</code> fields</span></li>
+          </ul>
+          <a class="proof-link" href="#inspector">Check it in the inspector</a>
+        </div>
+        <div class="panel">
+          <div class="panel-h">Kept by us</div>
+          <p class="body-p">Only what billing needs. Nothing you wrote.</p>
+          <ul class="ilist ok">
+            <li><span data-pix="check"></span><span>Model name</span></li>
+            <li><span data-pix="check"></span><span>Token count</span></li>
+            <li><span data-pix="check"></span><span>Cost</span></li>
+            <li><span data-pix="check"></span><span>Time</span></li>
+            <li><span data-pix="check"></span><span>Your wallet address<small>top-ups and Ghost Credit need it</small></span></li>
+          </ul>
+          <a class="proof-link" href="/account#export">Download everything we store about you</a>
+        </div>
+        <div class="panel">
+          <div class="panel-h">Never kept</div>
+          <p class="body-p">Never written to our database.</p>
+          <ul class="ilist no">
+            <li><span data-pix="cross"></span><span>Your prompts</span></li>
+            <li><span data-pix="cross"></span><span>The answers</span></li>
+            <li><span data-pix="cross"></span><span>Your IP address</span></li>
+            <li><span data-pix="cross"></span><span>Your device</span></li>
+          </ul>
+          <p class="hint" style="margin-top:14px">Your chat history stays in your own browser. You can export or wipe it in the chat.</p>
+          <a class="proof-link" href="/app">Open chat</a>
+        </div>
+      </div>
+      <div class="zdr-line">
+        <p><b>Zero Data Retention (ZDR)</b> means the provider keeps nothing after answering. Every GHOSTKEY request forces it with <code class="inline">provider: {"zdr": true}</code>.</p>
+        <a class="proof-link" href="https://openrouter.ai/api/v1/endpoints/zdr" target="_blank" rel="noopener">OpenRouter's public ZDR list</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="inspector">
+    <div class="wrap">
+      <div class="sec-h"><div><h2>Inspector</h2><p>Paste any request, the way you would send it to an OpenAI-style API. We show you, side by side, what OpenRouter would receive. Nothing is sent to a model and nothing is charged.</p></div><span class="meta">POST /api/inspect</span></div>
+      <div class="insp-in">
+        <div>
+          <label class="label" for="req">Your request (JSON)</label>
+          <textarea class="textarea" id="req" spellcheck="false" style="margin-top:10px"></textarea>
+          <p class="err-line" id="req-err" hidden style="margin-top:8px"></p>
+        </div>
+        <div class="insp-side">
+          <span class="label">Try it</span>
+          <button class="btn" id="run" type="button">Inspect</button>
+          <button class="btn ghost" id="reset" type="button">Reset sample</button>
+          <p class="hint">The sample sneaks in an email in <code class="inline">user</code>, a wallet in <code class="inline">metadata</code>, and a provider rule that allows data collection. Watch what happens to them.</p>
+          <a class="proof-link" id="code-link" hidden target="_blank" rel="noopener">Read the code: server/privacy.mjs</a>
+          <span class="src" id="code-none">Source code: published at launch</span>
+        </div>
+      </div>
+      <div id="insp-out"></div>
+    </div>
+  </section>
+
+  <section class="sec" id="limits">
+    <div class="wrap">
+      <div class="sec-h"><div><h2>Honest limits</h2><p>What this privacy covers, and what it does not.</p></div></div>
+      <ul class="limits">
+        <li><span><b>Privacy covers who you are, not what you write.</b> The model still reads your question to answer it.</span></li>
+        <li><span><b>Zero Data Retention is the provider's policy</b>, listed publicly by OpenRouter. OpenRouter screens for illegal content as the law requires.</span></li>
+        <li><span><b>Your balance is held by GHOSTKEY's server</b> as prepaid credit. It is not a token in your wallet.</span></li>
+        <li><span><b>We keep your wallet address</b> because top-ups and Ghost Credit need it.</span></li>
+        <li><span><b>Ghost Credit is platform credit for AI, not money.</b> It depends on how much $GHOST is traded. Nothing here promises a price or profit.</span></li>
+      </ul>
+      <p class="hint" style="margin-top:16px">Full privacy policy: <a class="link" href="/docs#privacy">docs#privacy</a>.</p>
+    </div>
+  </section>
+</main>
+<footer id="foot"></footer>
+<script type="module" src="/js/privacy.js"></script>
+</body>
+</html>

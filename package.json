@@ -1,0 +1,19 @@
+{
+  "name": "ghostkey",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.mjs",
+    "test": "node --no-warnings tools/test-server.mjs",
+    "verify:prices": "node tools/verify/compare-prices.mjs",
+    "verify:hour": "node tools/verify/recompute-hour.mjs",
+    "wallets": "node tools/new-wallets.mjs"
+  },
+  "dependencies": {
+    "ethers": "^6.17.0"
+  },
+  "engines": {
+    "node": ">=22.5"
+  }
+}

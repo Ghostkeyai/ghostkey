@@ -1,0 +1,9 @@
+{
+  "contract": "GhostLedger",
+  "chainId": 4663,
+  "address": "0x72d41a95004244E00fa8D3Bd188f8F33F6eA35C8",
+  "poster": "0x2e0f5Fa3Fa660d80EB2591ab5A44617E45e9F089",
+  "txHash": "0x0d799e3264e716e4ad7f9c144e79fc7f1797b5a3aaf15e3d98537b9991ce81cf",
+  "rpc": "https://rpc.mainnet.chain.robinhood.com",
+  "deployedAt": "2026-11-24T23:39:29.332Z"
+}

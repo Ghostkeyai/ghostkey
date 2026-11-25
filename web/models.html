@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Models &amp; prices · GHOSTKEY</title>
+<meta name="description" content="Every model on GHOSTKEY, with OpenRouter's price per 1M tokens and its zero-retention providers. Compare every price with OpenRouter from your own browser.">
+<meta name="theme-color" content="#121413">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/chrome.css">
+<link rel="stylesheet" href="/css/pages.css">
+<style>
+  .cmp { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; margin-top: 32px; }
+  @media (max-width: 860px) { .cmp { grid-template-columns: 1fr; } }
+  .score { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-top: 16px; }
+  .score .big { font: 500 46px/1 var(--font-pixel-2); color: var(--mint); }
+  .score .big .of { color: var(--dim); font-size: .6em; }
+  .score .lbl { color: var(--dim); font-size: 14px; }
+  .score .lbl b { color: var(--ink); font-weight: 500; }
+  .score .lbl .bad { color: var(--bad); }
+  .cmp .btns { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 18px; }
+
+  .toolbar { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; }
+  .toolbar .input { min-width: 0; }
+  .flags { display: flex; gap: 6px; }
+  @media (max-width: 760px) { .toolbar { grid-template-columns: 1fr 1fr; } .toolbar .input { grid-column: 1 / -1; } }
+  .labs { margin-top: 12px; }
+  .shown { font: 400 12px var(--font-mono); color: var(--faint); margin: 16px 0 8px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .mtable td:first-child { min-width: 220px; }
+  .mtable .mn { font-size: 14.5px; }
+  .mtable .p { font-family: var(--font-mono); font-size: 13px; text-align: right; white-space: nowrap; }
+  .provs { display: flex; flex-wrap: wrap; gap: 4px; max-width: 260px; }
+  .provs .more { background: none; border: 0; color: var(--dim); font: 400 11px var(--font-mono); cursor: pointer; padding: 0 4px; }
+  .ok-cell { white-space: nowrap; }
+  .ok-cell .tag .pix { vertical-align: 0; }
+  tr.diff td { background: #ff8a7a0a; }
+  .more-row { text-align: center; margin-top: 16px; }
+  /* HP: tabel jadi kartu */
+  @media (max-width: 760px) {
+    .mtable thead { display: none; }
+    .mtable, .mtable tbody, .mtable tr, .mtable td { display: block; width: 100%; }
+    .mtable tr { border-bottom: 1px solid var(--line); padding: 12px 0; display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; }
+    .mtable td { border: 0; padding: 0 4px; min-width: 0 !important; }
+    .mtable td.c-model { grid-column: 1 / -1; }
+    .mtable td.c-lab, .mtable td.c-ctx { display: none; }
+    .mtable td.c-in::before { content: "in "; color: var(--faint); }
+    .mtable td.c-out::before { content: "out "; color: var(--faint); }
+    .mtable td.c-in, .mtable td.c-out { text-align: left; }
+    .mtable td.c-prov { grid-column: 1 / -1; }
+    .mtable td.c-ok { grid-column: 1 / -1; }
+    .mtable td.c-ok:empty { display: none; }
+  }
+</style>
+<meta property="og:title" content="Models &amp; prices · GHOSTKEY">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:image" content="/img/og.png">
+</head>
+<body>
+<header id="nav"></header>
+<main>
+  <section class="page-head">
+    <div class="wrap">
+      <div class="head-row">
+        <div>
+          <span class="kicker">Models &amp; prices</span>
+          <h1 class="h1">Same price as <span class="px">OpenRouter.</span></h1>
+          <p class="lead">No markup. No top-up fee. Every model here has at least one provider with Zero Data Retention: the provider keeps nothing after answering.</p>
+        </div>
+        <div class="head-stats">
+          <div><b id="count">—</b><span>Models live</span><a href="/api/models" target="_blank" rel="noopener">/api/models ↗</a></div>
+          <div><b id="nprov">—</b><span>ZDR providers</span><a href="https://openrouter.ai/api/v1/endpoints/zdr" target="_blank" rel="noopener">OpenRouter list ↗</a></div>
+        </div>
+      </div>
+
+      <div class="cmp" id="compare">
+        <div class="panel tick">
+          <div class="panel-h">Check our prices yourself</div>
+          <p class="body-p">Your browser downloads OpenRouter's public price list and compares it with ours, row by row. Our server is not involved.</p>
+          <div class="btns"><button class="btn" id="cmp" type="button">Compare with OpenRouter</button><a class="proof-link" href="https://openrouter.ai/api/v1/models" target="_blank" rel="noopener">OpenRouter price list</a></div>
+          <div id="cmp-out"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-h">Zero Data Retention, checked too</div>
+          <p class="body-p">The same check downloads OpenRouter's public ZDR list. It confirms every model here has a provider on that list.</p>
+          <div id="zdr-out" style="margin-top:14px"><p class="hint">Runs with the price check.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="wrap">
+      <div class="toolbar">
+        <input class="input" id="q" type="search" placeholder="Search by name, id or lab" aria-label="Search models">
+        <div class="flags chips"><button data-f="free" type="button" aria-pressed="false" title="Works with free messages">Free OK</button><button data-f="vision" type="button" aria-pressed="false">Vision</button><button data-f="tools" type="button" aria-pressed="false">Tools</button></div>
+        <select class="select" id="sort" aria-label="Sort">
+          <option value="in">Input price: low to high</option>
+          <option value="-in">Input price: high to low</option>
+          <option value="out">Output price: low to high</option>
+          <option value="-out">Output price: high to low</option>
+          <option value="-ctx">Context: largest</option>
+          <option value="name">Name A–Z</option>
+        </select>
+      </div>
+      <div class="chips labs" id="labs"></div>
+      <div class="shown"><span id="shown"></span><span id="fetched"></span></div>
+      <div class="table-scroll">
+        <table class="table mtable">
+          <thead><tr>
+            <th><button data-sort="name" type="button">Model</button></th>
+            <th>Lab</th>
+            <th class="r"><button data-sort="in" type="button">In /1M</button></th>
+            <th class="r"><button data-sort="out" type="button">Out /1M</button></th>
+            <th class="r"><button data-sort="-ctx" type="button">Context</button></th>
+            <th>ZDR providers</th>
+            <th>vs OpenRouter</th>
+          </tr></thead>
+          <tbody id="rows"><tr><td colspan="7"><p class="loading-line">Loading the live catalog</p></td></tr></tbody>
+        </table>
+      </div>
+      <div class="more-row" id="more" hidden><button class="btn ghost" id="more-btn" type="button">Show all</button></div>
+    </div>
+  </section>
+</main>
+<footer id="foot"></footer>
+<script type="module" src="/js/models.js"></script>
+</body>
+</html>
