@@ -38,6 +38,21 @@ async function officialCA() {
   return caCache.v;
 }
 
+// Alamat milik proyek yang boleh disebut di grup (selain CA): dibaca dari /api/config + dompet fee & kontrak Pons resmi
+const FIXED_OK = ['0x5c6654aB246c27284f54ec2F73BfaAF9D88e4840', '0x72d41a95004244E00fa8D3Bd188f8F33F6eA35C8',
+  '0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e', '0xd3AFEB2a57f70eF218Aa82451c51B2fb0416Ac9e'];
+let okCache = { v: new Set(FIXED_OK.map((a) => a.toLowerCase())), at: 0 };
+async function projectAddrs() {
+  if (Date.now() - okCache.at < 300_000) return okCache.v;
+  try {
+    const j = await (await fetch(SITE_API + '/api/config')).json();
+    okCache = { v: new Set([...FIXED_OK, j.treasury, j.owner, j.ledger, j.ghostToken].filter(Boolean).map((a) => a.toLowerCase())), at: Date.now() };
+  } catch {}
+  return okCache.v;
+}
+// tepat 40 hex: hash transaksi (64 hex) tidak dianggap alamat
+const ADDR_RE = /(?<![0-9a-fA-F])0x[0-9a-fA-F]{40}(?![0-9a-fA-F])/g;
+
 // ---------- admin (cache 5 mnt per grup) ----------
 const adminCache = new Map();
 async function isAdmin(chatId, userId) {
@@ -147,7 +162,8 @@ async function onMessage(msg) {
     if (R[cmd]) { await tg('sendMessage', { chat_id: chatId, text: R[cmd], parse_mode: 'HTML', disable_web_page_preview: true, reply_to_message_id: msg.message_id, allow_sending_without_reply: true }); return; }
   }
   if (msg.chat.type === 'private') { if (shouldAnswer(msg, text)) await agentReply(msg, text); return; }
-  if (await isAdmin(chatId, from.id)) { remember(chatId, nameOf(from) + ' (admin)', text); if (shouldAnswer(msg, text) && (msg.reply_to_message?.from?.id === me?.id || text.toLowerCase().includes('@' + (me?.username || '').toLowerCase()))) await agentReply(msg, text); return; }
+  const anonAdmin = msg.sender_chat?.id === chatId || (msg.is_automatic_forward && msg.sender_chat?.type === 'channel');
+  if (anonAdmin || await isAdmin(chatId, from.id)) { remember(chatId, nameOf(from) + ' (admin)', text); if (shouldAnswer(msg, text) && (msg.reply_to_message?.from?.id === me?.id || text.toLowerCase().includes('@' + (me?.username || '').toLowerCase()))) await agentReply(msg, text); return; }
   if (from.is_bot && from.username !== undefined) { /* bot lain lewat admin saja */ }
 
   // pesan terusan dari kanal / akun lain = pola spam umum
@@ -157,7 +173,8 @@ async function onMessage(msg) {
   }
   // alamat 0x selain CA resmi
   const ca = await officialCA();
-  const addrs = (text.match(/0x[0-9a-fA-F]{40}/g) || []).filter((a) => !ca || a.toLowerCase() !== ca.toLowerCase());
+  const okAddrs = await projectAddrs();
+  const addrs = (text.match(ADDR_RE) || []).filter((a) => !(ca && a.toLowerCase() === ca.toLowerCase()) && !okAddrs.has(a.toLowerCase()));
   const badLinks = [];
   for (const u of linksIn(msg)) {
     if (await linkAllowed(u, ca)) continue;
@@ -238,7 +255,8 @@ async function agentReply(msg, text) {
     let out = j.choices?.[0]?.message?.content?.trim();
     if (!out) return;
     // jaga-jaga: buang alamat 0x selain CA resmi & GhostLedger
-    out = out.replace(/0x[0-9a-fA-F]{40}/g, (a) => [ca, '0x72d41a95004244E00fa8D3Bd188f8F33F6eA35C8'].filter(Boolean).some((x) => x.toLowerCase() === a.toLowerCase()) ? a : '(see /ca)');
+    const okA = await projectAddrs();
+    out = out.replace(ADDR_RE, (a) => (ca && ca.toLowerCase() === a.toLowerCase()) || okA.has(a.toLowerCase()) ? a : '(see /ca)');
     await tg('sendMessage', { chat_id: chatId, text: out.slice(0, 1200), disable_web_page_preview: true, reply_to_message_id: msg.message_id, allow_sending_without_reply: true });
     remember(chatId, 'ghost (you)', out);
   } catch (e) { console.warn('[agent]', e.message); }
