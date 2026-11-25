@@ -141,7 +141,7 @@ try {
   check('struk: biaya = token × tarif (mode tiruan)', Math.abs(rc.costUsd - Math.round(rc.tokensIn * cheap.in + rc.tokensOut * cheap.out) / 1e6) < 1e-9, `$${rc.costUsd}`);
   check('struk: forwarded = permintaan ZDR tersamar', J(rc.forwarded.body.provider) === J({ zdr: true, data_collection: 'deny' }) &&
     /hidden/.test(rc.forwarded.headers.Authorization) && !('user' in rc.forwarded.body) && rc.forwarded.body.stream === true);
-  check('struk: stored = model/tokens/cost/time', J(rc.stored) === J(['model', 'tokens', 'cost', 'time']) && rc.stripped.includes('wallet_address'));
+  check('struk: stored = model/tokens/cost/time/generation ID + kolom struk', J(rc.stored) === J(['model', 'tokens', 'cost', 'time', 'OpenRouter generation ID']) && rc.stripped.includes('wallet_address') && /^[0-9a-f]{64}$/.test(rc.forwardedSha256 || '') && 'generationId' in rc);
   const order = s.events.map((e) => e.event || (e.data === '[DONE]' ? 'done' : 'chunk'));
   check('SSE: potongan → receipt → [DONE]', order.at(-1) === 'done' && order.at(-2) === 'receipt' && order[0] === 'chunk');
   s = await sse('/api/chat', { model: pricey.id, clientId, messages: [{ role: 'user', content: 'hello' }] });

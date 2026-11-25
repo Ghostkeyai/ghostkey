@@ -222,7 +222,7 @@ function setupTry() {
     const sent = r.forwarded || null;
     d.innerHTML = `<span>cost ${esc(usd(r.costUsd))}</span><span>${int(r.tokensIn)} in / ${int(r.tokensOut)} out</span><span class="ok">identity removed ✓</span>`
       + (sent ? '<button type="button">view what we sent</button>' : '<a class="inl" href="#inspector">view what we send</a>')
-      + '<span class="rcpt-more">Stored: model, tokens, cost, time. <a href="/app">Continue in the full app →</a></span>';
+      + '<span class="rcpt-more">Stored: model, tokens, cost, time, generation ID. <a href="/app">Continue in the full app →</a></span>';
     if (sent) {
       const b = d.querySelector('button');
       b.onclick = () => {

@@ -9,7 +9,7 @@ export const ROADMAP = {
     'OpenAI-compatible API with keys', 'GhostLedger contract (hourly Merkle roots)', 'Proof page and public code on GitHub',
     '$GHOST on Pons with a fixed 2% creator tax', 'Hourly Ghost Credit for holders (25% of creator fees)',
     'Holder perks: 30 free messages/day, 30 free API calls/day, 600 API requests/min', 'Live creator-fee meter',
-    'Telegram agent and anti-spam filter', 'On-chain buy alerts and hourly payout posts in the group', 'DEX Screener chart on the site'],
+    'Telegram agent and anti-spam filter', 'On-chain buy alerts and hourly payout posts in the group', 'DEX Screener chart on the site', 'A receipt for every request (generation ID, cost, hash, check against OpenRouter, CSV export)'],
   next: ['Chat with your PDFs, privately (text extracted in the browser)', 'A receipt for every request (generation ID, cost, hash, CSV export)',
     'Confidential (TEE) models, labelled with attestation links', 'Web search, off by default, honestly labelled',
     'Personas stored only in your browser', 'Spend caps and expiry on API keys', 'Monthly fee report re-checked by a script'],

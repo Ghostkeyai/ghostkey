@@ -32,6 +32,7 @@ async function init() {
     renderHead();
     $('#signout').onclick = () => signOut();
     $('#usage-refresh').hidden = false;
+    $('#usage-csv').hidden = false;
     $('#usage-refresh').onclick = () => loadUsage();
     loadUsage();
     // Lanjutkan konfirmasi setoran yang tertunda (mis. tab sempat ditutup)
@@ -397,7 +398,7 @@ async function loadUsage() {
     return;
   }
   body.innerHTML = `<div class="table-scroll"><table class="table">
-    <thead><tr><th>Time</th><th>Model</th><th class="r hide-m">Tokens in</th><th class="r hide-m">Tokens out</th><th class="r">Cost</th><th class="hide-m">Via</th></tr></thead>
+    <thead><tr><th>Time</th><th>Model</th><th class="r hide-m">Tokens in</th><th class="r hide-m">Tokens out</th><th class="r">Cost</th><th class="hide-m">Via</th><th>Receipt</th></tr></thead>
     <tbody>${rows.map((u) => `<tr>
       <td class="num" title="${esc(when(u.at))}">${ago(u.at)}<span class="sub">${when(u.at)}</span></td>
       <td><span class="mono" style="font-size:13px;overflow-wrap:anywhere">${esc(u.model)}</span><span class="sub">${int(u.tokensIn)} in · ${int(u.tokensOut)} out</span></td>
@@ -405,6 +406,7 @@ async function loadUsage() {
       <td class="r num hide-m">${int(u.tokensOut)}</td>
       <td class="r num">${usd(u.costUsd, { max: 6 })}</td>
       <td class="hide-m"><span class="tag${u.source === 'free' ? ' gold' : ''}">${esc(SRC[u.source] || u.source || '—')}</span></td>
+      <td>${u.generationId ? `<a class="proof-link" href="/api/receipt/${encodeURIComponent(u.generationId)}" target="_blank" rel="noopener" title="${esc(u.generationId)}">Check</a>` : '<span class="dim">—</span>'}</td>
     </tr>`).join('')}</tbody></table></div>`;
 }
 

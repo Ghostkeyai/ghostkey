@@ -70,7 +70,7 @@ The answer shows `wouldSend` (the exact URL, headers and body, with our key hidd
 
 ### 5. We do not store your prompts or answers
 
-The database keeps the model name, token counts, cost and time of each call. There is no column for text. The full schema is in [`server/db.mjs`](server/db.mjs), and /proof lists every table and column, read live from the database.
+The database keeps the model name, token counts, cost, time and OpenRouter generation ID of each call (the ID lets anyone check the billed cost at `/api/receipt/<id>`). There is no column for text. The full schema is in [`server/db.mjs`](server/db.mjs), and /proof lists every table and column, read live from the database.
 
 Signed in, you can download everything stored about your account:
 

@@ -51,7 +51,7 @@ export async function renderProof() {
       'The request to OpenRouter is built in one function. It uses our shared key and fixed headers. Paste any request into the inspector to see the exact body we would send.',
       [ext('/privacy', 'Try the inspector'), gh(c.privacy, 'privacy.mjs')]],
     ['We do not store your prompts or answers.',
-      'We keep the model name, token count, cost and time. There is no column for text anywhere in the database (live list below).',
+      'We keep the model name, token count, cost, time and OpenRouter\'s generation ID (so each cost can be checked against OpenRouter\'s own record). There is no column for text anywhere in the database (live list below).',
       [ext(d.checks.export, 'Download your data (/api/me/export)'), gh(c.schema, 'db.mjs schema')]],
     [`${pct(d.split.holderShareBps)} of $GHOST fees become Ghost Credit, every hour.`,
       'Each hour we publish who got what as JSON, and post its Merkle root to the GhostLedger contract. Anyone can recompute it.',

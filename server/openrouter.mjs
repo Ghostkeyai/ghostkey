@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 // Penghubung ke OpenRouter: katalog model (hanya yang punya penyedia ZDR) + chat (streaming & biasa).
 // Badan & header permintaan hulu SELALU dibentuk oleh privacy.mjs buildUpstream().
 import { config } from './config.mjs';
@@ -126,9 +127,11 @@ export function billedCost(model, tokensIn, tokensOut, upstream) {
  */
 export async function streamChat({ model, messages, maxTokens, onDelta, signal, extra = {}, reasoningOff = false }) {
   const up = buildUpstream({ modelId: model.id, messages, maxTokens, stream: true, extra, reasoningOff });
-  if (!config.openrouterKey) return { ...(await mockStream({ model, messages, maxTokens, onDelta })), upstream: up };
+  const bodyStr = JSON.stringify(up.body);
+  const forwardedSha256 = sha256(bodyStr);
+  if (!config.openrouterKey) return { ...(await mockStream({ model, messages, maxTokens, onDelta })), upstream: up, genId: null, forwardedSha256 };
 
-  const r = await fetch(up.url, { method: 'POST', signal, headers: up.headers, body: JSON.stringify(up.body) });
+  const r = await fetch(up.url, { method: 'POST', signal, headers: up.headers, body: bodyStr });
   if (!r.ok) {
     const t = await r.text().catch(() => '');
     const err = new Error(`upstream_${r.status}`);
@@ -137,7 +140,7 @@ export async function streamChat({ model, messages, maxTokens, onDelta, signal, 
     throw err;
   }
 
-  let usage = null, text = '', finish = null, buf = '';
+  let usage = null, text = '', finish = null, buf = '', genId = null;
   const dec = new TextDecoder();
   for await (const part of r.body) {
     buf += dec.decode(part, { stream: true });
@@ -150,6 +153,7 @@ export async function streamChat({ model, messages, maxTokens, onDelta, signal, 
       if (data === '[DONE]') continue;
       let obj; try { obj = JSON.parse(data); } catch { continue; }
       if (obj.error) { const e = new Error('upstream_error'); e.detail = JSON.stringify(obj.error).slice(0, 400); throw e; }
+      if (!genId && typeof obj.id === 'string' && obj.id.startsWith('gen-')) genId = obj.id;   // ID generasi OpenRouter
       if (obj.usage) usage = obj.usage;               // usage.cost tetap diteruskan: itulah yang ditagihkan
       const ch = obj.choices?.[0];
       if (ch?.delta?.content) text += ch.delta.content;
@@ -160,7 +164,7 @@ export async function streamChat({ model, messages, maxTokens, onDelta, signal, 
   }
   const tokensIn = usage?.prompt_tokens ?? 0;
   const tokensOut = usage?.completion_tokens ?? 0;
-  return { tokensIn, tokensOut, ...billedCost(model, tokensIn, tokensOut, usage?.cost), text, finish, upstream: up };
+  return { tokensIn, tokensOut, ...billedCost(model, tokensIn, tokensOut, usage?.cost), text, finish, upstream: up, genId, forwardedSha256 };
 }
 
 /**
@@ -169,6 +173,8 @@ export async function streamChat({ model, messages, maxTokens, onDelta, signal, 
  */
 export async function completeChat({ model, messages, maxTokens, extra = {}, signal }) {
   const up = buildUpstream({ modelId: model.id, messages, maxTokens, stream: false, extra });
+  const bodyStr = JSON.stringify(up.body);
+  const forwardedSha256 = sha256(bodyStr);
   if (!config.openrouterKey) {
     let text = '';
     const r = await mockStream({ model, messages, maxTokens, onDelta: (c) => { text += c.choices[0].delta.content; } });
@@ -176,10 +182,10 @@ export async function completeChat({ model, messages, maxTokens, extra = {}, sig
       json: { id: 'gen-mock', object: 'chat.completion', model: model.id, created: Math.floor(Date.now() / 1000),
         choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }],
         usage: { prompt_tokens: r.tokensIn, completion_tokens: r.tokensOut, total_tokens: r.tokensIn + r.tokensOut } },
-      ...r, upstream: up,
+      ...r, upstream: up, genId: null, forwardedSha256,
     };
   }
-  const res = await fetch(up.url, { method: 'POST', signal, headers: up.headers, body: JSON.stringify(up.body) });
+  const res = await fetch(up.url, { method: 'POST', signal, headers: up.headers, body: bodyStr });
   const json = await res.json().catch(() => null);
   if (!res.ok || !json || json.error) {
     const err = new Error(`upstream_${res.status}`);
@@ -190,8 +196,10 @@ export async function completeChat({ model, messages, maxTokens, extra = {}, sig
   const tokensIn = u.prompt_tokens ?? 0, tokensOut = u.completion_tokens ?? 0;
   const b = billedCost(model, tokensIn, tokensOut, u.cost);
   delete json.provider;
-  return { json, tokensIn, tokensOut, ...b, upstream: up };
+  return { json, tokensIn, tokensOut, ...b, upstream: up, genId: typeof json.id === 'string' && json.id.startsWith('gen-') ? json.id : null, forwardedSha256 };
 }
+
+const sha256 = (t) => createHash('sha256').update(t, 'utf8').digest('hex');
 
 // Mode tiruan untuk uji lokal tanpa kunci OpenRouter — jawaban jelas berlabel, biaya dihitung dari tarif.
 async function mockStream({ model, messages, maxTokens, onDelta }) {

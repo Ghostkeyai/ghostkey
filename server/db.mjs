@@ -95,6 +95,10 @@ CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 
 db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
 db.exec(SCHEMA);
+// migrasi: ID generasi OpenRouter per pemakaian (untuk struk yang bisa dicek ke catatan OpenRouter; bukan isi pesan)
+if (!db.prepare("SELECT 1 FROM pragma_table_info('usage') WHERE name='gen_id'").get()) {
+  db.exec('ALTER TABLE usage ADD COLUMN gen_id TEXT; CREATE INDEX IF NOT EXISTS usage_gen ON usage(gen_id);');
+}
 
 export const now = () => Date.now();
 export const today = () => new Date().toISOString().slice(0, 10);

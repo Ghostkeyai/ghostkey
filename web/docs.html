@@ -97,6 +97,7 @@
           <p><b>Prepaid.</b> You add balance with ETH or USDG on Robinhood Chain. The top-up fee is 0%. One dollar paid is one dollar of credit.</p>
           <p><b>Hold, then settle.</b> When a call starts, we hold the most it could cost (your <code class="inline">max_tokens</code> at the model's price). When it ends, we charge the exact cost OpenRouter reports for that call and release the rest. If the call fails, the hold is released in full.</p>
           <p><b>No markup.</b> The amount billed is the cost OpenRouter reports in <code class="inline">usage.cost</code>. Every chat answer shows it, and your <a class="link" href="/account#usage">usage table</a> lists every call.</p>
+          <p><b>Receipts.</b> Every response carries <code class="inline">generationId</code> (OpenRouter's ID for that answer) and <code class="inline">forwardedSha256</code> (a hash of the exact body we sent, kept only in your receipt). Open <code class="inline">/api/receipt/&lt;generationId&gt;</code> to see OpenRouter's own record for that answer next to what we billed. Your account page exports every call as CSV.</p>
           <p><b>Balance is not a token.</b> It is prepaid AI credit held by GHOSTKEY's server. It cannot be traded or withdrawn.</p>
         </section>
 
@@ -143,7 +144,7 @@
 
         <section id="terms">
           <h2>Terms of use</h2>
-          <p class="updated">Plain-language summary · last updated 25 Nov 2026</p>
+          <p class="updated">Plain-language summary · last updated 26 Nov 2026</p>
           <ol class="plain">
             <li><b>What we do.</b> GHOSTKEY forwards your requests to AI models through OpenRouter and bills you what OpenRouter charges.</li>
             <li><b>Your balance.</b> It is prepaid credit for AI use on GHOSTKEY. It is not a deposit, an investment or a token. It cannot be withdrawn or traded.</li>
@@ -163,7 +164,7 @@
           <ul class="plain">
             <li><b>Your wallet address</b>, once you sign in. Top-ups and Ghost Credit need it.</li>
             <li><b>Your balance</b>, your top-up transactions and your Ghost Credit rows.</li>
-            <li><b>Usage rows</b>: model, tokens in and out, cost, time, and whether it came from chat or the API.</li>
+            <li><b>Usage rows</b>: model, tokens in and out, cost, time, whether it came from chat or the API, and OpenRouter's generation ID for that answer (an ID, not the content).</li>
             <li><b>API keys</b>: a hash and the first characters, never the full key.</li>
             <li><b>A random browser ID</b> stored in your browser, to count your free messages.</li>
           </ul>

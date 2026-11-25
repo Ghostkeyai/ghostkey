@@ -37,10 +37,10 @@ export function release(accountId, heldMicro) {
 
 // Catatan pemakaian: model, token, biaya, waktu — tanpa isi pesan.
 export function recordUsage(u) {
-  q.run(`INSERT INTO usage(account_id,client_id,source,model,tokens_in,tokens_out,cost_micro,created_at)
-         VALUES(?,?,?,?,?,?,?,?)`,
+  q.run(`INSERT INTO usage(account_id,client_id,source,model,tokens_in,tokens_out,cost_micro,created_at,gen_id)
+         VALUES(?,?,?,?,?,?,?,?,?)`,
         u.account_id ?? null, u.client_id ?? null, u.source, u.model,
-        u.tokens_in | 0, u.tokens_out | 0, u.cost_micro | 0, now());
+        u.tokens_in | 0, u.tokens_out | 0, u.cost_micro | 0, now(), u.gen_id ?? null);
 }
 
 // ---------- Pesan gratis ----------

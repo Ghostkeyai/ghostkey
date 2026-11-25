@@ -96,7 +96,28 @@ function receiptHtml(r, idx) {
       <span>Stored: ${esc(stored)}</span>
       <button class="sent" type="button" data-sent="${idx}">${pix('eye', 12)}What we sent</button>
     </div>
+    ${r.generationId ? `<div class="rcpt-id">
+      <span title="OpenRouter generation ID">Gen <b>${esc(r.generationId.slice(0, 18))}…</b></span>
+      ${r.forwardedSha256 ? `<span title="SHA-256 of the exact body sent to OpenRouter. Not stored on our server.">Sent SHA-256 <b>${esc(r.forwardedSha256.slice(0, 12))}…</b></span>` : ''}
+      <button class="sent" type="button" data-check="${esc(r.generationId)}">Check against OpenRouter</button>
+      <span class="rcpt-res" data-res="${esc(r.generationId)}"></span>
+    </div>` : ''}
   </div>`;
+}
+
+// Cek struk ke catatan OpenRouter sendiri (/api/receipt/:id); catatan bisa butuh ±1 menit sebelum tersedia
+async function checkReceipt(id) {
+  const out = document.querySelector(`[data-res="${CSS.escape(id)}"]`);
+  if (!out) return;
+  out.className = 'rcpt-res'; out.textContent = 'Checking…';
+  try {
+    const r = await fetch(`/api/receipt/${encodeURIComponent(id)}`);
+    const j = await r.json();
+    if (r.status === 202) { out.textContent = 'OpenRouter is still publishing this record. Try again in a minute.'; return; }
+    if (!r.ok) { out.textContent = j.message || 'Could not check right now.'; return; }
+    out.className = 'rcpt-res ' + (j.match ? 'ok' : 'bad');
+    out.innerHTML = `OpenRouter recorded ${usd(j.openrouter.costUsd, { max: 6 })}${j.openrouter.provider ? ` via ${esc(j.openrouter.provider)}` : ''} · we billed ${usd(j.ghostkey.billedUsd, { max: 6 })} · ${j.match ? 'match ✓' : 'mismatch'} · <a class="link" href="/api/receipt/${encodeURIComponent(id)}" target="_blank" rel="noopener">raw</a>`;
+  } catch { out.textContent = 'Could not check right now.'; }
 }
 
 // ---------- Model ----------
@@ -473,6 +494,8 @@ async function init() {
   $('#thread').addEventListener('click', (e) => {
     const s = e.target.closest('[data-sug]');
     if (s) { send(s.dataset.sug); return; }
+    const ck = e.target.closest('[data-check]');
+    if (ck) { checkReceipt(ck.dataset.check); return; }
     const w = e.target.closest('[data-sent]');
     if (w && chat) { const m = chat.messages[Number(w.dataset.sent)]; if (m?.receipt) openDrawer(m.receipt); return; }
     const a = e.target.closest('[data-act]');

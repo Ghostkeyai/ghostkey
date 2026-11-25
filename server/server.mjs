@@ -29,6 +29,42 @@ r.get('/api/config', async () => configData());
 r.get('/api/models', async () => (await getCatalog()).list.map(publicModel));
 r.get('/api/stats', async () => statsData());
 r.get('/api/fees', async () => (await import('./fees-live.mjs')).feesData());
+// Struk publik: biaya yang kami tagih untuk satu jawaban vs catatan OpenRouter sendiri untuk ID generasi itu.
+// Hanya kolom tagihan yang ditampilkan (model, provider, token, biaya, waktu) — tidak ada isi, akun, atau user agent.
+const receiptCache = new Map();
+r.get('/api/receipt/:id', async (req, res, p) => {
+  const id = String(p.id || '');
+  if (!/^gen-[A-Za-z0-9-]{6,100}$/.test(id)) return [400, { error: 'bad_id' }];
+  if (!rateLimit(`rcpt:${clientIp(req)}`, 30, 60_000)) return [429, { error: 'slow_down' }];
+  const u = q.one('SELECT model, tokens_in, tokens_out, cost_micro, created_at, source FROM usage WHERE gen_id=?', id);
+  if (!u) return [404, { error: 'not_found', message: 'No GHOSTKEY answer has this generation ID.' }];
+  let rec = receiptCache.get(id);
+  if (!rec) {
+    if (!config.openrouterKey) return [503, { error: 'openrouter_unavailable' }];
+    let resp, j = null;
+    try {
+      resp = await fetch(`https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(id)}`, { headers: { authorization: `Bearer ${config.openrouterKey}` }, signal: AbortSignal.timeout(15_000) });
+      j = await resp.json().catch(() => null);
+    } catch { return [502, { error: 'openrouter_unavailable' }]; }
+    if (resp.status === 404) return [202, { status: 'pending', message: 'OpenRouter has not published this record yet. Try again in a minute.' }];
+    if (!resp.ok || !j?.data) return [502, { error: 'openrouter_unavailable' }];
+    const d = j.data;
+    rec = { createdAt: d.created_at, model: d.model, provider: d.provider_name || (d.provider_responses || []).find((x) => x.status === 200)?.provider_name || null,
+      tokensPrompt: d.native_tokens_prompt ?? null, tokensCompletion: d.native_tokens_completion ?? null, tokensReasoning: d.native_tokens_reasoning ?? null,
+      costUsd: Number(d.usage ?? d.total_cost ?? NaN), finishReason: d.finish_reason ?? null };
+    receiptCache.set(id, rec);
+    if (receiptCache.size > 5000) receiptCache.delete(receiptCache.keys().next().value);
+  }
+  const orMicro = Math.round(rec.costUsd * 1e6);
+  return {
+    generationId: id,
+    ghostkey: { model: u.model, tokensIn: u.tokens_in, tokensOut: u.tokens_out, billedUsd: microToUsd(u.cost_micro), at: new Date(u.created_at).toISOString(), via: u.source },
+    openrouter: rec,
+    match: Number.isFinite(orMicro) && orMicro === u.cost_micro,
+    note: "OpenRouter's own record for this generation, fetched with GHOSTKEY's API key. Billing fields only: no content, account or device data.",
+  };
+});
+
 // Changelog fitur (server/changelog.json, terbaru di atas) — dipakai halaman roadmap & bot grup untuk pengumuman "Shipped"
 r.get('/api/changelog', async () => { try { return JSON.parse(await readFile(join(ROOT, 'server', 'changelog.json'), 'utf8')); } catch { return []; } });
 r.get('/api/proof', async () => proofData());
@@ -177,7 +213,18 @@ r.post('/api/me/apikey/revoke', async (req, res) => {
   const { prefix } = await readJson(req);
   return revokeApiKey(a.id, prefix) ? { ok: true } : [404, { error: 'not_found' }];
 });
-const usageRow = (u) => ({ at: u.created_at, model: u.model, tokensIn: u.tokens_in, tokensOut: u.tokens_out, costUsd: microToUsd(u.cost_micro), source: u.source });
+const usageRow = (u) => ({ at: u.created_at, model: u.model, tokensIn: u.tokens_in, tokensOut: u.tokens_out, costUsd: microToUsd(u.cost_micro), source: u.source, generationId: u.gen_id || null });
+// CSV semua pemakaian akun ini (tanpa isi pesan): bisa dicocokkan baris per baris lewat /api/receipt/<generation_id>
+const csvCell = (v) => { const t = String(v ?? ''); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+r.get('/api/me/usage.csv', async (req, res) => {
+  const a = needAuth(req, res); if (!a) return;
+  const base = config.publicUrl || DEFAULT_HOST;
+  const rows = q.all('SELECT * FROM usage WHERE account_id=? ORDER BY id DESC LIMIT 20000', a.id);
+  const lines = [['time_utc', 'via', 'model', 'tokens_in', 'tokens_out', 'cost_usd', 'openrouter_generation_id', 'check_url'].join(',')];
+  for (const u of rows) lines.push([new Date(u.created_at).toISOString(), u.source, u.model, u.tokens_in, u.tokens_out, microToUsd(u.cost_micro).toFixed(6), u.gen_id || '', u.gen_id ? `${base}/api/receipt/${u.gen_id}` : ''].map(csvCell).join(','));
+  res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="ghostkey-usage-${new Date().toISOString().slice(0, 10)}.csv"` });
+  res.end(lines.join('\n') + '\n');
+});
 r.get('/api/me/usage', async (req, res) => {
   const a = needAuth(req, res); if (!a) return;
   return q.all('SELECT * FROM usage WHERE account_id=? ORDER BY id DESC LIMIT 100', a.id).map(usageRow);

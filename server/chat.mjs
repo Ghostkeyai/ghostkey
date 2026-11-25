@@ -8,7 +8,7 @@ import { sseStart, sseData, sseEvent, sendJson } from './http.mjs';
 
 const MAX_CHARS = 400_000;
 const MIN_TOKENS = 64;
-export const STORED = ['model', 'tokens', 'cost', 'time'];
+export const STORED = ['model', 'tokens', 'cost', 'time', 'OpenRouter generation ID'];
 
 // Bersihkan daftar pesan dari klien (format OpenAI). Hanya role/content (+ tool_calls/tool_call_id untuk alat)
 // yang dibawa; kolom lain (mis. `name`) dibuang.
@@ -86,6 +86,9 @@ function makeReceipt({ model, r, costMicro, balanceMicro, payer, clientId, freeL
     stripped: STRIPPED,
     stored: STORED,
     mock: !config.openrouterKey,
+    generationId: r.genId || null,                        // ID generasi OpenRouter: cek biaya ke catatan OpenRouter sendiri
+    forwardedSha256: r.forwardedSha256 || null,           // SHA-256 dari body persis yang dikirim ke OpenRouter (tidak disimpan server)
+    verifyUrl: r.genId ? `/api/receipt/${r.genId}` : null,
     ...extra,
   };
 }
@@ -146,7 +149,7 @@ export async function runChatStream(req, res, opts) {
     }
     finished = true;
     const costMicro = Math.round(r.costUsd * 1e6);   // dibulatkan ke mikro-USD terdekat (bukan ke atas)
-    const usage = { ...usageBase, tokens_in: r.tokensIn, tokens_out: r.tokensOut };
+    const usage = { ...usageBase, tokens_in: r.tokensIn, tokens_out: r.tokensOut, gen_id: r.genId || null };
     // Jawaban kosong (semua token habis untuk berpikir): pesan gratis tidak dihitung ke jatah pengunjung
     const emptyAnswer = !streamedChars && r.tokensOut > 0 && !openaiStream;
     let balanceMicro = null;
@@ -207,12 +210,12 @@ export async function runChatJson(req, res, { account, body, clientId, ip, freeL
     const r = await completeChat({ model, messages, maxTokens, extra: pickAllowed(body) });
     const costMicro = Math.round(r.costUsd * 1e6);   // dibulatkan ke mikro-USD terdekat (bukan ke atas)
     const usage = { account_id: account?.id, client_id: payer.free ? clientId : null, source: payer.source,
-      model: model.id, tokens_in: r.tokensIn, tokens_out: r.tokensOut };
+      model: model.id, tokens_in: r.tokensIn, tokens_out: r.tokensOut, gen_id: r.genId || null };
     let balanceMicro = null;
     if (payer.free) { consumeFree(clientId, ip, costMicro); recordUsage({ ...usage, cost_micro: costMicro }); }
     else balanceMicro = settle(account.id, heldMicro, costMicro, usage);
     const receipt = makeReceipt({ model, r, costMicro, balanceMicro, payer, clientId, freeLimit });
-    const h = { 'X-Ghostkey-Cost': String(receipt.costUsd), 'X-Ghostkey-Rate-In-Per-M': String(model.in),
+    const h = { 'X-Ghostkey-Generation-Id': String(receipt.generationId || ''), 'X-Ghostkey-Cost': String(receipt.costUsd), 'X-Ghostkey-Rate-In-Per-M': String(model.in),
       'X-Ghostkey-Rate-Out-Per-M': String(model.out) };
     if (payer.free) h['X-Ghostkey-Free-Left'] = String(receipt.freeLeft);
     else h['X-Ghostkey-Balance'] = String(receipt.balanceUsd);
