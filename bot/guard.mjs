@@ -96,8 +96,13 @@ const MARKETING = [
   /\b(partnership|collab\w*)\s*(offer|proposal|opportunity|request)\b/i,
   // promosi channel "call" / grup VIP / proyek lain
   /\b(new|next|alpha|vip|gem)\s*calls?\b|\bcalls?\s*(channel|group|loading)\b|\bvip\s*(group|channel|chat|access)\b|\bdon'?t miss (out|this|it)\b|\b(join|check)\s*(my|our)\s*(channel|group|vip|calls?)\b|\bdropping (shortly|soon|now)\b|\bnext\s*\d{2,4}\s*x\b|\bdid\s*\d{2,4}\s*x\b/i,
+  // jual vote/reaksi DEX Screener (roket/api), "bayar belakangan", "orang asli bukan bot"
+  /\b(dex\w*|dexscreener)\s*(rocket|vote|votes|reaction|reactions|flames?|fire|boost|boosts)\b|\b(rocket|flames?|fire)\s*(vote|votes|reactions?)\b|\b\d+\s*(votes?|reactions?|rockets?|flames?)\s*(before|first|then)\b|\bbefore\s*(you\s*)?pay\b|\bpay\s*(after|later)\b|\b(real|actual)\s*(people|users|humans)\s*(not|no)\s*(bots?|fake)\b|\bnot\s*bots?\s*not\s*fake\b/i,
 ];
 const isMarketing = (t) => MARKETING.some((r) => r.test(t));
+// nama akun penjual jasa (mis. "MORGAN DEX PRO", "Trend Booster"): kalau pesannya juga menyinggung vote/boost/bayar → langsung blokir
+const SELLER_NAME = /\b(dex\s*(pro|boost\w*|rocket|vote\w*|trend\w*|service\w*)|trend(ing)?\s*(boost\w*|service\w*|bot|pro)|boost(er|ing)?\s*(service\w*|pro)?|marketing|promoter|promotions?|listing\s*(agent|service)|volume\s*(bot|service)|kol\s*(agency|service))\b/i;
+const SELLER_TALK = /\b(vote|votes|boost|rocket|flames?|trend\w*|pay|paid|price|package|deliver\w*|service|promo\w*|listing|volume)\b/i;
 const strikes = new Map(); // userId → { n, at } (memori saja)
 function strike(uid) {
   const s = strikes.get(uid);
@@ -228,6 +233,13 @@ async function onMessage(msg) {
     await tg('banChatMember', { chat_id: chatId, user_id: from.id });
     console.log('[guard] peniru/agen palsu diblokir', from.id, nameOf(from));
     return sayTemp(chatId, `Removed an account pretending to be GHOSTKEY. The team only speaks here as admins, and never DMs first.`, 30_000);
+  }
+  // akun bernama penjual jasa yang menawarkan vote/boost/trending → hapus + blokir langsung
+  if (SELLER_NAME.test(`${nameOf(from)} ${from.username || ''}`) && SELLER_TALK.test(text)) {
+    await tg('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
+    await tg('banChatMember', { chat_id: chatId, user_id: from.id });
+    console.log('[guard] penjual jasa diblokir', from.id, nameOf(from));
+    return sayTemp(chatId, `Removed a seller offering paid votes or boosts. Bought votes aren't real holders.`, 20_000);
   }
   // jasa marketing / listing / trending / ajakan DM → hapus; pelanggaran kedua dalam 24 jam → blokir
   if (isMarketing(text)) {
