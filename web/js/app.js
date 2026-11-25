@@ -12,6 +12,8 @@ let cfg = {}, account = null, MODELS = [], byId = new Map(), model = null;
 let chat = null;            // percakapan aktif
 let busy = null;            // AbortController saat menjawab
 let freeLeft = null;
+let freeTotal = null;   // jatah dari /api/free (pemegang: per hari)
+let holderFree = false; // true = jatah harian pemegang $GHOST
 let filter = 'Free';
 
 // Model bawaan: utamakan model hemat yang bisa memakai pesan gratis
@@ -155,10 +157,10 @@ function renderMeter() {
     el.innerHTML = `<span class="lbl">Balance</span><a class="bal" href="/account" title="Open your account">${usd(account.balanceUsd)}</a>`;
     return;
   }
-  const total = Number(cfg.freeMessages ?? 10);
+  const total = Number(freeTotal ?? cfg.freeMessages ?? 10);
   const left = freeLeft == null ? null : Math.max(0, Number(freeLeft));
   const cells = left == null ? '' : `<span class="cells" aria-hidden="true">${Array.from({ length: Math.min(total, 20) }, (_, i) => `<i class="${i < left ? 'on' : ''}"></i>`).join('')}</span>`;
-  const txt = left == null ? 'Free messages' : `Free ${left}/${total}`;
+  const txt = left == null ? 'Free messages' : holderFree ? `<span title="$GHOST holder: free messages reset at 00:00 UTC">Holder · ${left}/${total} today</span>` : `Free ${left}/${total}`;
   const act = account
     ? '<a class="btn small" href="/account">Add balance</a>'
     : '<button class="btn small" id="m-signin" type="button"><span class="signin-lbl">Sign in to use balance</span><span class="show-s">Sign in</span></button>';
@@ -170,7 +172,7 @@ function renderMeter() {
 }
 
 async function refreshFree() {
-  try { freeLeft = (await api(`/api/free?clientId=${CID}`)).freeLeft; } catch { freeLeft = null; }
+  try { const f = await api(`/api/free?clientId=${CID}`); freeLeft = f.freeLeft; freeTotal = f.freeMessages ?? null; holderFree = !!f.holder; } catch { freeLeft = null; }
   renderMeter();
   const p = $('#prompt');
   if (account && Number(account.balanceUsd) > 0) p.placeholder = 'Ask anything.';
@@ -238,10 +240,10 @@ const scrollEnd = () => { const w = $('#thread-wrap'); w.scrollTop = w.scrollHei
 
 // Kotak galat dengan tindakan yang jelas
 function errorBlock(code, message) {
-  const total = cfg.freeMessages ?? 10;
+  const total = freeTotal ?? cfg.freeMessages ?? 10;
   const text = {
     sign_in: `You have used your ${total} free messages. Sign in with a wallet and add balance to keep chatting.`,
-    top_up: 'Your balance is too low for this message. Add balance, or switch to a cheaper model.',
+    top_up: holderFree && !(Number(account?.balanceUsd) > 0) ? `You have used today's ${total} holder messages. They reset at 00:00 UTC. Add balance to keep going now.` : 'Your balance is too low for this message. Add balance, or switch to a cheaper model.',
     model_needs_balance: 'Free messages work only with low-cost models (marked Free OK). Pick one, or sign in and add balance.',
     free_paused: 'Free messages are paused for today because the daily free budget is used up. Sign in and add balance to keep chatting.',
     bad_model: 'This model is not available right now. Pick another one.',

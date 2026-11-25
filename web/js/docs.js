@@ -67,6 +67,9 @@ async function init() {
   const set = (k, v) => { const el = document.querySelector(`[data-cfg="${k}"]`); if (el) el.textContent = v; };
   set('freeMessages', `${int(free)} per browser`);
   set('freeMessages2', `${int(free)} calls`);
+  if (cfg.holderFreePerDay != null) set('holderFree', `${int(cfg.holderFreePerDay)} a day in chat + ${int(cfg.holderFreePerDay)} API calls a day`);
+  if (cfg.apiRpm != null) set('rpm', `${int(cfg.apiRpm)} requests a minute · ${int(cfg.holderApiRpm ?? cfg.apiRpm)} for holders`);
+  for (const el of document.querySelectorAll('[data-min]')) el.textContent = int(cfg.minTokens ?? 100000);
   if (cfg.minDepositUsd != null || cfg.maxDepositUsd != null) set('deposit', `${usd(cfg.minDepositUsd ?? 5, { max: 0 })} to ${usd(cfg.maxDepositUsd ?? 2000, { max: 0 })} per payment`);
   for (const el of document.querySelectorAll('[data-share]')) el.textContent = pct(cfg.holderShareBps ?? 2500);
   const x = cfg.links?.x, tg = cfg.links?.telegram;

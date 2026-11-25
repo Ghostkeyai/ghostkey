@@ -421,11 +421,15 @@ async function renderCredit() {
     <div class="panel"><span class="label">Eligible this hour</span><div class="bignum" style="font-size:30px;margin-top:12px">${h.eligible == null ? '—' : h.eligible ? 'Yes' : 'No'}</div><p class="hint" style="margin-top:8px">Needs an average of ${int(cfg.minTokens ?? 100000)} $GHOST over the hour.</p></div>
     <div class="panel"><span class="label">Total received</span><div class="bignum" style="font-size:30px;margin-top:12px">${usd(h.creditedUsd ?? 0, { max: 2 })}</div><p class="hint" style="margin-top:8px">Added to your balance as AI credit.</p></div>
   </div>`;
-  el.innerHTML = head + '<p class="loading-line">Loading your Ghost Credit history</p>';
+  const pk = h.perks;
+  const perksHtml = cfg.ghostToken ? `<div class="panel ${pk ? 'tick' : ''}" style="margin-bottom:16px"><span class="label">Holder perks</span>
+    ${pk ? `<p class="body-p" style="margin-top:10px"><b>Active for this wallet.</b> ${int(pk.freeLeftToday)} of ${int(pk.freePerDay)} free chat messages left today, ${int(pk.apiFreeLeftToday)} of ${int(pk.freePerDay)} free API calls, and an API limit of ${int(pk.apiRpm)} requests a minute. Free messages work on low-cost models when your balance is $0 and reset at 00:00 UTC.</p>`
+      : `<p class="body-p" style="margin-top:10px">Hold ${int(cfg.minTokens ?? 100000)} $GHOST in this wallet to get ${int(cfg.holderFreePerDay ?? 30)} free messages a day, ${int(cfg.holderFreePerDay ?? 30)} free API calls a day and ${int(cfg.holderApiRpm ?? 600)} API requests a minute (normally ${int(cfg.apiRpm ?? 120)}). Checked on-chain every few minutes.</p>`}</div>` : '';
+  el.innerHTML = head + perksHtml + '<p class="loading-line">Loading your Ghost Credit history</p>';
   let r = null;
   try { r = await api(`/api/holder/${acct.wallet}`); } catch {}
   const credits = r?.credits || [];
-  el.innerHTML = head + (credits.length
+  el.innerHTML = head + perksHtml + (credits.length
     ? `<div class="table-scroll"><table class="table"><thead><tr><th>Hour</th><th class="r">Credit</th><th class="hide-m">Merkle root</th><th>Check it</th></tr></thead><tbody>
         ${credits.map((c) => `<tr>
           <td class="num">${esc(hourLabel(c.hour))}<span class="sub">hour #${esc(c.hour)}</span></td>

@@ -151,7 +151,7 @@ export async function runChatStream(req, res, opts) {
     const emptyAnswer = !streamedChars && r.tokensOut > 0 && !openaiStream;
     let balanceMicro = null;
     if (payer.free) {
-      if (emptyAnswer) bumpFreeCost(ip, costMicro);
+      if (emptyAnswer) bumpFreeCost(ip, costMicro, clientId);
       else consumeFree(clientId, ip, costMicro);
       recordUsage({ ...usage, cost_micro: costMicro });
     } else balanceMicro = settle(account.id, heldMicro, costMicro, usage);

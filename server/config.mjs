@@ -71,6 +71,12 @@ export const config = {
   freeMaxOutPerM: num('FREE_MAX_OUT_PER_M', 1),    // model gratis: harga output ≤ $1 per 1 juta token
   freeMaxTokens: num('FREE_MAX_TOKENS', 1200),
 
+  // Keuntungan pemegang $GHOST (≥ HOLDER_MIN_TOKENS, dicek on-chain, disimpan 5 menit)
+  holderFreePerDay: num('HOLDER_FREE_PER_DAY', 30),     // pesan gratis web per hari + panggilan API gratis per hari (UTC)
+  holderFreeDailyUsd: num('HOLDER_FREE_DAILY_USD', 5),  // pagu biaya gratis pemegang seluruh situs per hari (terpisah dari umum)
+  apiRpm: num('API_RPM', 120),
+  holderApiRpm: num('HOLDER_API_RPM', 600),
+
   // Tautan publik
   links: {
     x: env('LINK_X', ''),   // kosong sampai akun X benar-benar dibuat (jangan tautkan handle yang belum dimiliki)

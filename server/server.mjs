@@ -9,7 +9,7 @@ import { Router, sendJson, readJson, clientIp, rateLimit } from './http.mjs';
 import { makeNonce, verifySignIn, sessionCookie, accountFromSession, logout, normWallet,
   listApiKeys, createApiKey, revokeApiKey, accountFromBearer } from './auth.mjs';
 import { getCatalog, modelInfo, publicModel } from './openrouter.mjs';
-import { freeLeft, apiClientId, quoteCredit, creditDeposit, pruneDaily } from './billing.mjs';
+import { freeLeft, apiClientId, holderClientId, quoteCredit, creditDeposit, pruneDaily } from './billing.mjs';
 import { runChatStream, runChatJson, cleanMessages, STORED } from './chat.mjs';
 import { buildUpstream, redactForDisplay, STRIPPED, ZDR_LIST_URL, incomingNotSent, droppedFields, FORCED_PROVIDER } from './privacy.mjs';
 import { ledgerList, ledgerHour, ledgerHourRaw, holderCredits, startCreditScheduler, runHour } from './credit.mjs';
@@ -81,6 +81,22 @@ async function ghostBalance(wallet) {
 }
 const isExcludedWallet = (w) => [config.treasury, config.ownerWallet, ...config.teamWallets].some((a) => a && a.toLowerCase() === w);
 
+// Pemegang $GHOST (≥ HOLDER_MIN_TOKENS, bukan dompet tim/pool) → jatah gratis harian + batas API lebih tinggi.
+// Saldo dibaca on-chain lalu disimpan 5 menit per dompet; RPC gagal → dianggap bukan pemegang, dicoba lagi 30 detik kemudian.
+const holderCache = new Map();
+async function isHolder(account) {
+  if (!account?.wallet || !config.ghostToken) return false;
+  const w = account.wallet.toLowerCase();
+  const c = holderCache.get(w);
+  if (c && c.exp > Date.now()) return c.ok;
+  let ok = false, ttl = 300_000;
+  try { const g = await ghostBalance(w); ok = !isExcludedWallet(w) && g != null && g >= config.holderMinTokens; }
+  catch { ttl = 30_000; }
+  holderCache.set(w, { ok, exp: Date.now() + ttl });
+  if (holderCache.size > 5000) holderCache.delete(holderCache.keys().next().value);
+  return ok;
+}
+
 r.get('/api/holder/:wallet', async (req, res, p) => {
   const w = normWallet(p.wallet);
   if (!w) return [400, { error: 'bad_wallet' }];
@@ -127,15 +143,23 @@ r.get('/api/me', async (req, res) => {
   const creditedMicro = q.one('SELECT COALESCE(SUM(credit_micro),0) s FROM credits WHERE account_id=?', a.id).s;
   let ghost = null;
   try { ghost = await ghostBalance(a.wallet); } catch {}
+  const perks = await isHolder(a);
   return {
     wallet: a.wallet,
     balanceUsd: microToUsd(a.balance_micro - a.held_micro),
     apiKeys: listApiKeys(a.id),
-    apiFreeLeft: freeLeft(apiClientId(a.id), config.freeApiCalls),
+    apiFreeLeft: perks ? freeLeft(holderClientId(a.id, 'api'), config.holderFreePerDay) : freeLeft(apiClientId(a.id), config.freeApiCalls),
+    apiRpm: perks ? config.holderApiRpm : config.apiRpm,
     holder: {
       ghost,
       eligible: ghost == null ? null : !isExcludedWallet(a.wallet) && ghost >= config.holderMinTokens,
       creditedUsd: microToUsd(creditedMicro),
+      perks: perks ? {
+        freePerDay: config.holderFreePerDay,
+        freeLeftToday: freeLeft(holderClientId(a.id, 'web'), config.holderFreePerDay),
+        apiFreeLeftToday: freeLeft(holderClientId(a.id, 'api'), config.holderFreePerDay),
+        apiRpm: config.holderApiRpm,
+      } : null,
     },
   };
 });
@@ -178,7 +202,11 @@ r.get('/api/me/export', async (req, res, p, url) => {
   const h = url.searchParams.get('download') ? { 'Content-Disposition': 'attachment; filename="ghostkey-export.json"' } : {};
   sendJson(res, 200, data, h);
 });
-r.get('/api/free', async (req, res, p, url) => ({ freeLeft: freeLeft(url.searchParams.get('clientId')), freeMessages: config.freeMessages }));
+r.get('/api/free', async (req, res, p, url) => {
+  const a = accountFromSession(req);
+  if (await isHolder(a)) return { freeLeft: freeLeft(holderClientId(a.id, 'web'), config.holderFreePerDay), freeMessages: config.holderFreePerDay, holder: true, perDay: true };
+  return { freeLeft: freeLeft(url.searchParams.get('clientId')), freeMessages: config.freeMessages };
+});
 
 // ---------- Isi saldo (0% biaya) ----------
 r.get('/api/deposit/quote', async (req, res, p, url) => {
@@ -219,9 +247,13 @@ r.post('/api/chat', async (req, res) => {
   const ip = clientIp(req);
   if (!rateLimit(`chat:${ip}`, 40, 60_000)) return [429, { error: 'slow_down', message: 'Too many messages. Wait a minute.' }];
   const b = await readJson(req, 25_000_000);
+  const account = accountFromSession(req);
+  const holder = await isHolder(account);
   await runChatStream(req, res, {
-    account: accountFromSession(req), modelId: b.model, messages: b.messages,
-    clientId: String(b.clientId || ''), ip, wantTokens: Number(b.maxTokens) || undefined, extra: b,
+    account, modelId: b.model, messages: b.messages,
+    clientId: holder ? holderClientId(account.id, 'web') : String(b.clientId || ''),
+    ...(holder ? { freeLimit: config.holderFreePerDay } : {}),
+    ip, wantTokens: Number(b.maxTokens) || undefined, extra: b,
   });
 });
 
@@ -234,16 +266,19 @@ r.get('/v1/models', async () => ({
 r.post('/v1/chat/completions', async (req, res) => {
   const account = accountFromBearer(req);
   if (!account) return [401, { error: { message: 'Missing or invalid API key. Create one at /account.', code: 'invalid_api_key' } }];
-  if (!rateLimit(`api:${account.id}`, 120, 60_000)) return [429, { error: { message: 'Rate limit: 120 requests per minute.', code: 'rate_limited' } }];
+  const holder = await isHolder(account);
+  const rpm = holder ? config.holderApiRpm : config.apiRpm;
+  if (!rateLimit(`api:${account.id}`, rpm, 60_000)) return [429, { error: { message: `Rate limit: ${rpm} requests per minute.`, code: 'rate_limited' } }];
   const b = await readJson(req, 25_000_000);
   const ip = clientIp(req);
-  // Akun tanpa saldo tetap bisa mencoba API memakai jatah gratisnya sendiri (model hemat saja)
-  const clientId = apiClientId(account.id);
+  // Akun tanpa saldo tetap bisa mencoba API memakai jatah gratisnya sendiri (model hemat saja); pemegang: jatah harian
+  const clientId = holder ? holderClientId(account.id, 'api') : apiClientId(account.id);
+  const freeLimit = holder ? config.holderFreePerDay : config.freeApiCalls;
   if (b.stream) {
-    return runChatStream(req, res, { account, modelId: b.model, messages: b.messages, clientId, ip, freeLimit: config.freeApiCalls,
+    return runChatStream(req, res, { account, modelId: b.model, messages: b.messages, clientId, ip, freeLimit,
       wantTokens: Number(b.max_tokens || b.max_completion_tokens) || undefined, openaiStream: true, extra: b });
   }
-  return runChatJson(req, res, { account, body: b, clientId, ip, freeLimit: config.freeApiCalls });
+  return runChatJson(req, res, { account, body: b, clientId, ip, freeLimit });
 });
 
 // ---------- Admin (kunci ADMIN_KEY) ----------

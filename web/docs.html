@@ -107,9 +107,11 @@
             <tr><td>Free API calls for a new account</td><td class="num" data-cfg="freeMessages2">10 calls</td></tr>
             <tr><td>Models allowed for free messages</td><td>Low-cost models, marked “Free OK”</td></tr>
             <tr><td>Top-up range</td><td class="num" data-cfg="deposit">$5 to $2,000 per payment</td></tr>
-            <tr><td>Rate limits</td><td>Fair use. Very fast bursts are slowed with HTTP 429.</td></tr>
+            <tr><td>Free messages for $GHOST holders</td><td class="num" data-cfg="holderFree">30 a day in chat + 30 API calls a day</td></tr>
+            <tr><td>API rate limit</td><td class="num" data-cfg="rpm">120 requests a minute · 600 for holders</td></tr>
           </tbody></table></div>
           <p style="margin-top:12px">Free messages pause for the day if the site-wide free budget runs out. Paid calls are not affected.</p>
+          <p style="margin-top:8px"><b>Holders</b> are wallets with at least <span data-min>100,000</span> $GHOST, read on-chain and refreshed every few minutes. Sign in with that wallet: holder free messages are used when your balance is $0, work on low-cost models, and reset at 00:00 UTC.</p>
         </section>
 
         <section id="errors">

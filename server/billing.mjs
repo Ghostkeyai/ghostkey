@@ -49,6 +49,9 @@ const ipSalt = randomBytes(32).toString('hex');
 const ipKey = (ip) => 'ip:' + createHash('sha256').update(ipSalt + String(ip)).digest('hex').slice(0, 20);
 
 export const apiClientId = (accountId) => `acct${accountId}apifree0000`;
+// Jatah harian pemegang: satu clientId per akun per hari UTC (web dan API terpisah) → hitungan otomatis reset 00:00 UTC
+export const holderClientId = (accountId, kind) => `holder-${kind}-${accountId}-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
+const isHolderCid = (c) => String(c || '').startsWith('holder-');
 
 export function freeLeft(clientId, limit = config.freeMessages) {
   if (!clientId) return 0;
@@ -60,6 +63,11 @@ export function freeLeft(clientId, limit = config.freeMessages) {
 export function canUseFree(clientId, ip, limit = config.freeMessages) {
   if (!/^[a-zA-Z0-9_-]{16,64}$/.test(clientId || '')) return { ok: false, reason: 'no_client' };
   if (freeLeft(clientId, limit) <= 0) return { ok: false, reason: 'free_used' };
+  // pemegang: tanpa batas per-IP, pagu biaya hariannya sendiri
+  if (isHolderCid(clientId)) {
+    if (getDaily('holder_total').micro >= usdToMicro(config.holderFreeDailyUsd)) return { ok: false, reason: 'free_paused' };
+    return { ok: true };
+  }
   if (getDaily(ipKey(ip)).count >= config.freePerIpDay) return { ok: false, reason: 'free_ip_limit' };
   if (getDaily('free_total').micro >= usdToMicro(config.freeDailyUsd)) return { ok: false, reason: 'free_paused' };
   return { ok: true };
@@ -69,13 +77,15 @@ export function consumeFree(clientId, ip, costMicro) {
   tx(() => {
     q.run(`INSERT INTO free_clients(client_id,used,created_at) VALUES(?,1,?)
            ON CONFLICT(client_id) DO UPDATE SET used=used+1`, clientId, now());
+    if (isHolderCid(clientId)) { bumpDaily('holder_total', 1, costMicro); return; }
     bumpDaily(ipKey(ip), 1, costMicro);
     bumpDaily('free_total', 1, costMicro);
   });
 }
 
 // Jawaban kosong pada pesan gratis: biaya tetap dihitung ke anggaran harian, tapi jatah pengunjung tidak berkurang
-export function bumpFreeCost(ip, costMicro) {
+export function bumpFreeCost(ip, costMicro, clientId) {
+  if (isHolderCid(clientId)) return bumpDaily('holder_total', 0, costMicro);
   tx(() => { bumpDaily(ipKey(ip), 0, costMicro); bumpDaily('free_total', 0, costMicro); });
 }
 

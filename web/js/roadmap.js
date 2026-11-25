@@ -11,7 +11,7 @@ function counts() {
     const items = document.querySelectorAll(`[data-phase="${ph}"] .item`);
     const d = [...items].filter((i) => i.classList.contains('done')).length;
     const t = $(`[data-count="${ph}"]`);
-    if (t) t.textContent = ph === 'shipped' || ph === 'now' ? `${d} of ${items.length} done` : `${items.length} items`;
+    if (t) t.textContent = d ? `${d} of ${items.length} done` : `${items.length} items`;
   }
 }
 
