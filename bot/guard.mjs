@@ -4,8 +4,8 @@
 // Env: GUARD_TOKEN (wajib), GHOSTKEY_API (bawaan http://127.0.0.1:4877), GUARD_CHAT (opsional: hanya layani grup ini, id angka),
 //      OPENROUTER_API_KEY (agent balas chat), GUARD_MODEL (bawaan anthropic/claude-haiku-5.5), GUARD_DAILY (maks balasan agent/hari, bawaan 600).
 // Agent: membalas saat di-mention, di-reply, atau ada pertanyaan yang relevan. Konteks obrolan hanya di memori (tidak ditulis ke disk).
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { join, dirname, basename } from 'node:path';
 import { classifyRequest, REQ_HINT } from './requests.mjs';
 const TOKEN = process.env.GUARD_TOKEN;
 if (!TOKEN) { console.error('GUARD_TOKEN kosong'); process.exit(1); }
@@ -274,7 +274,7 @@ async function onMessage(msg) {
 // ---------- request member: catat, nilai, hitung suara (status di STATE_DIRECTORY, bertahan sesudah restart) ----------
 const say = (msg, text) => tg('sendMessage', { chat_id: msg.chat.id, text, parse_mode: 'HTML', disable_web_page_preview: true, reply_to_message_id: msg.message_id, allow_sending_without_reply: true });
 const STATE_FILE = join(process.env.STATE_DIRECTORY || join(process.cwd(), 'data-guard'), 'state.json');
-let STATE = { requests: [], roadmapVotes: {}, announced: null, nextN: 1 };
+let STATE = { requests: [], roadmapVotes: {}, announced: null, nextN: 1, kitSent: [] };
 try { STATE = { ...STATE, ...JSON.parse(readFileSync(STATE_FILE, 'utf8')) }; } catch {}
 function saveState() { try { mkdirSync(dirname(STATE_FILE), { recursive: true }); writeFileSync(STATE_FILE, JSON.stringify(STATE, null, 1)); } catch (e) { console.warn('[state]', e.message); } }
 const normTitle = (t) => t.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
@@ -581,6 +581,41 @@ async function creditAnnouncer() {
 }
 creditAnnouncer();
 changelogAnnouncer();
+
+// ---------- antrean posting kit ke grup (STATE_DIRECTORY/kit/queue.json + gambar) ----------
+// queue.json: [{ id, at (ISO), text, photo (nama berkas di folder kit), pin }]. Tiap id dikirim sekali (dicatat di state).
+const KIT_DIR = join(dirname(STATE_FILE), 'kit');
+async function sendPhotoFile(chat, file, caption) {
+  try {
+    const fd = new FormData();
+    fd.append('chat_id', String(chat)); fd.append('caption', caption);
+    fd.append('photo', new Blob([readFileSync(file)], { type: 'image/jpeg' }), basename(file));
+    const j = await (await fetch(API + 'sendPhoto', { method: 'POST', body: fd })).json();
+    if (!j.ok) console.warn('[kit] sendPhoto', j.description);
+    return j.ok ? j.result : null;
+  } catch (e) { console.warn('[kit] sendPhoto', e.message); return null; }
+}
+async function kitPoster() {
+  for (;;) {
+    try {
+      let q = []; try { q = JSON.parse(readFileSync(join(KIT_DIR, 'queue.json'), 'utf8')); } catch {}
+      STATE.kitSent ||= [];
+      const x = q.filter((it) => !STATE.kitSent.includes(it.id) && Date.parse(it.at) <= Date.now()).sort((a, b) => Date.parse(a.at) - Date.parse(b.at))[0];
+      if (x) {
+        let m = null;
+        if (x.photo && existsSync(join(KIT_DIR, x.photo)) && x.text.length <= 1024) m = await sendPhotoFile(ALERT_CHAT, join(KIT_DIR, x.photo), x.text);
+        if (!m) m = await tg('sendMessage', { chat_id: ALERT_CHAT, text: x.text, disable_web_page_preview: true });
+        if (m) {
+          if (x.pin) await tg('pinChatMessage', { chat_id: m.chat.id, message_id: m.message_id, disable_notification: false });
+          STATE.kitSent.push(x.id); saveState();
+          console.log('[kit] terkirim', x.id);
+        }
+      }
+    } catch (e) { console.warn('[kit]', e.message); }
+    await sleep(30_000);
+  }
+}
+kitPoster();
 
 for (;;) {
   const ups = await tg('getUpdates', { offset, timeout: 50, allowed_updates: ['message', 'callback_query', 'chat_member'] });
