@@ -13,7 +13,7 @@ main { flex: 1; }
 .head-stats { display: flex; gap: 0; border: 1px solid var(--line); }
 .head-stats > div { padding: 14px 20px; min-width: 130px; }
 .head-stats > div + div { border-left: 1px solid var(--line); }
-.head-stats b { display: block; font: 500 28px/1.1 var(--font-pixel-2); color: var(--ink); }
+.head-stats b { display: block; font: 400 28px/1.1 var(--font-ui); color: var(--ink); }
 .head-stats span { font: 400 10.5px/1 var(--font-pixel); letter-spacing: .05em; text-transform: uppercase; color: var(--faint); }
 .head-stats a { color: var(--dim); font: 400 12px var(--font-mono); text-decoration: none; display: block; margin-top: 6px; }
 .head-stats a:hover { color: var(--mint); }
@@ -65,7 +65,7 @@ main { flex: 1; }
 .ilist li small { display: block; color: var(--faint); font-size: 13px; }
 
 /* Angka besar */
-.bignum { font: 500 clamp(40px, 5vw, 60px)/1 var(--font-pixel-2); color: var(--mint); letter-spacing: -.01em; }
+.bignum { font: 400 clamp(40px, 5vw, 60px)/1 var(--font-ui); color: var(--mint); letter-spacing: -.01em; }
 .bignum .c { color: var(--dim); }
 
 /* Batas jujur */

@@ -25,8 +25,8 @@
   .amt-box { display: flex; align-items: center; border: 1px solid var(--line-2); background: #0e100f; }
   .amt-box:focus-within { border-color: #9ff0c8aa; }
   .amt-box.bad { border-color: #ff8a7a88; }
-  .amt-box span { padding: 0 0 0 16px; font: 500 28px/1 var(--font-pixel-2); color: var(--dim); }
-  .amt-box input { flex: 1; min-width: 0; background: none; border: 0; outline: none; font: 500 28px/1 var(--font-pixel-2); color: var(--ink); padding: 14px 12px; }
+  .amt-box span { padding: 0 0 0 16px; font: 400 28px/1 var(--font-ui); color: var(--dim); }
+  .amt-box input { flex: 1; min-width: 0; background: none; border: 0; outline: none; font: 400 28px/1 var(--font-ui); color: var(--ink); padding: 14px 12px; }
   .quick { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
   .quick button { background: none; border: 1px solid var(--line-2); color: var(--dim); padding: 8px 12px; font: 400 13px var(--font-mono); cursor: pointer; }
   .quick button[aria-pressed="true"] { border-color: var(--mint); color: var(--mint); }
@@ -35,7 +35,7 @@
   .paste { margin-top: 22px; padding-top: 18px; border-top: 1px dashed var(--line-2); }
   .paste p { font-size: 13.5px; color: var(--dim); margin-bottom: 10px; }
   .quote .kv dd { font-size: 14px; }
-  .quote .kv .total dd { color: var(--mint); font: 500 22px/1 var(--font-pixel-2); }
+  .quote .kv .total dd { color: var(--mint); font: 400 22px/1 var(--font-ui); }
   .quote .kv .zero dd { color: var(--mint); }
   .dep-steps { list-style: none; display: grid; gap: 0; border: 1px solid var(--line); margin-top: 18px; }
   .dep-steps li { display: flex; justify-content: space-between; gap: 12px; padding: 11px 14px; font-size: 14px; color: var(--faint); }
@@ -55,7 +55,7 @@
   .usage-tot { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); margin-bottom: 16px; }
   .usage-tot div { padding: 14px 16px; font: 400 10.5px/1 var(--font-pixel); text-transform: uppercase; letter-spacing: .05em; color: var(--faint); }
   .usage-tot div + div { border-left: 1px solid var(--line); }
-  .usage-tot b { display: block; margin-top: 10px; font: 500 22px/1 var(--font-pixel-2); color: var(--ink); text-transform: none; letter-spacing: 0; }
+  .usage-tot b { display: block; margin-top: 10px; font: 400 22px/1 var(--font-ui); color: var(--ink); text-transform: none; letter-spacing: 0; }
   @media (max-width: 640px) { .usage-tot { grid-template-columns: 1fr 1fr; } .usage-tot div:nth-child(3) { border-left: 0; } .usage-tot div:nth-child(n+3) { border-top: 1px solid var(--line); } }
   @media (max-width: 640px) { .hide-m { display: none; } }
 

@@ -136,16 +136,18 @@ async function showHour(hour, scroll = true) {
       <div><dt>Fee claims this hour</dt><dd><span class="chain-links" style="justify-content:flex-end">${(d.feeTxs || row.feeTxs || []).map((h) => `<a href="${txUrl(h)}" target="_blank" rel="noopener">${esc(short(h, 8, 6))}</a>`).join('') || 'none'}</span></dd></div>
       <div><dt>Excluded</dt><dd><span class="chain-links" style="justify-content:flex-end">${(d.excluded || []).map((x) => { const a = typeof x === 'string' ? x : x?.address; return a ? `<a href="${addrUrl(a)}" target="_blank" rel="noopener"${x?.label ? ` title="${esc(x.label)}"` : ''}>${esc(x?.label ? `${x.label} · ${short(a)}` : short(a))}</a>` : ''; }).join('') || '—'}</span></dd></div>
     </dl>
-    <div style="margin-top:20px">${entries.length ? entriesTable(d.hour ?? hour, entries, d.root) : `<div class="empty">${pix('ghost', 36)}<span>No wallet was paid this hour${row.status === 'no_fees' ? ': there were no trading fees' : row.status === 'no_holders' ? ': no wallet qualified, so the pool rolls into the next hour' : ''}.</span></div>`}</div>
+    <div style="margin-top:20px">${entries.length ? entriesTable(d.hour ?? hour, entries, d.root, d.decimals ?? 18) : `<div class="empty">${pix('ghost', 36)}<span>No wallet was paid this hour${row.status === 'no_fees' ? ': there were no trading fees' : row.status === 'no_holders' ? ': no wallet qualified, so the pool rolls into the next hour' : ''}.</span></div>`}</div>
   </div>`;
 }
 
-function entriesTable(hour, entries, root) {
+// saldo mentah (wei token) → token utuh
+const tokens = (raw, dec) => { try { return Number(BigInt(raw ?? 0) / 10n ** BigInt(dec)); } catch { return 0; } };
+function entriesTable(hour, entries, root, dec = 18) {
   const max = 200;
   return `<div class="table-scroll"><table class="table"><thead><tr><th>Wallet</th><th class="r hide-m">Average $GHOST</th><th class="r">Credit</th><th>Check it</th></tr></thead><tbody>
     ${entries.slice(0, max).map((e, i) => `<tr>
       <td><a class="mono link" href="${addrUrl(e.wallet)}" target="_blank" rel="noopener" style="font-size:13px">${esc(short(e.wallet, 8, 6))}</a></td>
-      <td class="r num hide-m">${int(Math.floor(Number(e.avgBalance ?? 0)))}</td>
+      <td class="r num hide-m">${int(tokens(e.avgBalance, dec))}</td>
       <td class="r num">${usd(Number(e.creditMicro) / 1e6, { max: 6 })}</td>
       <td><button class="vbtn" type="button" data-verify="${esc(hour)}|${esc(e.wallet)}|${esc(e.creditMicro)}|${i}" data-root="${esc(root || '')}">Verify</button><div class="vres"></div></td>
     </tr>`).join('')}</tbody></table></div>
