@@ -1,0 +1,82 @@
+/* GHOSTKEY — halaman roadmap: rute piksel 4 stasiun + fase bernomor. Dimuat sesudah pages.css. */
+
+.rm-head .h1 .px { color: var(--mint); }
+
+/* Rute: garis piksel dengan stasiun; hantu berdiri di fase yang berjalan */
+.route { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 56px; padding-top: 58px; }
+.route-track { position: absolute; left: 0; right: 0; top: 76px; height: 8px;
+  background: repeating-linear-gradient(90deg, var(--line-2) 0 8px, transparent 8px 16px); }
+.route-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 37.5%;
+  background: repeating-linear-gradient(90deg, var(--mint) 0 8px, #9ff0c855 8px 12px); }
+.stop { position: relative; text-decoration: none; color: var(--dim); display: grid; gap: 6px; padding-right: 16px; }
+.stop .dot { width: 24px; height: 24px; background: var(--bg); border: 4px solid var(--line-2); margin-bottom: 14px; position: relative; z-index: 1; }
+.stop.done .dot { background: var(--mint); border-color: var(--mint); }
+.stop.now .dot { border-color: var(--gold); background: var(--bg); box-shadow: inset 0 0 0 4px var(--bg), inset 0 0 0 12px var(--gold); }
+.stop b { font: 500 30px/1 var(--font-pixel-2); color: var(--faint); }
+.stop.done b { color: var(--mint); }
+.stop.now b { color: var(--gold); }
+.stop .nm { font: 400 12px/1.2 var(--font-pixel); letter-spacing: .05em; text-transform: uppercase; color: var(--ink); }
+.stop .ct { font: 400 12px var(--font-mono); color: var(--faint); }
+.stop:hover .nm { color: var(--mint); }
+
+/* Hantu piksel kecil di atas stasiun "sekarang" */
+.rm-ghost { position: absolute; left: -6px; top: -60px; width: 36px; height: 40px; animation: rm-bob 2.4s steps(4) infinite; }
+.rm-ghost svg { width: 36px; height: 40px; image-rendering: pixelated; }
+@keyframes rm-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .rm-ghost { animation: none; } }
+
+/* Fase */
+.phase-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2.2fr); gap: 40px; }
+.phase-h { position: sticky; top: 96px; align-self: start; }
+.phase-h .pnum { font: 500 64px/1 var(--font-pixel-2); color: var(--faint); display: block; }
+.phase[data-phase="shipped"] .pnum { color: var(--mint); }
+.phase[data-phase="now"] .pnum { color: var(--gold); }
+.phase-h h2 { font: 300 clamp(26px, 3vw, 36px)/1.1 var(--font-ui); letter-spacing: -.02em; margin: 14px 0 10px; }
+.phase-h p { color: var(--dim); font-size: 15px; max-width: 26em; margin-bottom: 16px; }
+
+.items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; border: 1px solid var(--line); }
+.item { display: flex; gap: 14px; padding: 22px 22px 24px; background: var(--bg-2); border-bottom: 1px solid var(--line); min-width: 0; }
+.item:nth-child(odd) { border-right: 1px solid var(--line); }
+.items .item:last-child, .items .item:nth-last-child(2):nth-child(odd) { border-bottom: 0; }
+.item .st { flex: none; width: 20px; height: 20px; border: 2px solid var(--line-2); display: grid; place-items: center; margin-top: 3px; }
+/* item terakhir yang ganjil melebar penuh supaya tak ada sel kosong */
+.items .item:last-child:nth-child(odd) { grid-column: 1 / -1; border-right: 0; }
+.item button.chip { background: none; cursor: pointer; }
+.item button.chip:hover { background: #9ff0c814; }
+.item.done .st { border-color: var(--mint); background: #9ff0c814; color: var(--mint); }
+.item.wip .st { border-color: var(--gold); }
+.item.wip .st::after { content: ""; width: 8px; height: 8px; background: var(--gold); animation: rm-blink 1.2s steps(2) infinite; }
+@keyframes rm-blink { 50% { opacity: .2; } }
+.item h3 { font: 400 17px/1.3 var(--font-ui); color: var(--ink); margin-bottom: 6px; }
+.item p { font-size: 14px; color: var(--dim); margin-bottom: 12px; }
+.item:not(.done):not(.wip) h3 { color: #d7ddd9; }
+.item .links { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.item .mono { font: 400 12.5px var(--font-mono); color: var(--ink); overflow-wrap: anywhere; }
+.live-note { font: 400 11px/1.3 var(--font-pixel); letter-spacing: .04em; text-transform: uppercase; color: var(--gold); }
+.live-note.ok { color: var(--mint); }
+
+.rm-ask { margin-top: 28px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 20px 22px; border: 1px dashed #9ff0c855; }
+.rm-ask p { color: var(--ink); font-size: 15px; }
+.rm-ask #ask-links { display: flex; gap: 10px; flex-wrap: wrap; }
+
+@media (max-width: 900px) {
+  .phase-grid { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .phase-h { position: static; }
+  .phase-h .pnum { font-size: 48px; }
+}
+@media (max-width: 680px) {
+  .items { grid-template-columns: minmax(0, 1fr); }
+  .item:nth-child(odd) { border-right: 0; }
+  .items .item:nth-last-child(2):nth-child(odd) { border-bottom: 1px solid var(--line); }
+  /* rute jadi vertikal */
+  .route { grid-template-columns: minmax(0, 1fr); padding-top: 0; margin-top: 40px; gap: 18px; padding-left: 44px; }
+  .route-track { top: 8px; bottom: 8px; left: 8px; right: auto; width: 8px; height: auto;
+    background: repeating-linear-gradient(180deg, var(--line-2) 0 8px, transparent 8px 16px); }
+  .route-fill { width: auto; right: 0; height: 33%;
+    background: repeating-linear-gradient(180deg, var(--mint) 0 8px, #9ff0c855 8px 12px); }
+  .stop { grid-template-columns: auto 1fr; align-items: center; column-gap: 12px; row-gap: 2px; }
+  .stop .dot { position: absolute; left: -44px; top: 2px; margin: 0; }
+  .stop b { font-size: 24px; grid-row: span 2; }
+  .stop .ct { grid-column: 2; }
+  .rm-ghost { left: auto; right: 0; top: -6px; }
+}

@@ -315,7 +315,7 @@ function sendHtml(res, status, html) {
 // ---------- Berkas statis ----------
 const WEB = join(ROOT, 'web');
 const PAGES = { '/': 'index.html', '/app': 'app.html', '/account': 'account.html', '/models': 'models.html',
-  '/token': 'token.html', '/privacy': 'privacy.html', '/docs': 'docs.html' };
+  '/token': 'token.html', '/privacy': 'privacy.html', '/docs': 'docs.html', '/roadmap': 'roadmap.html' };
 const ROOT_FILES = new Set(['/llms.txt', '/robots.txt', '/sitemap.xml', '/favicon.ico', '/favicon.svg', '/site.webmanifest']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif',

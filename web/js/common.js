@@ -206,7 +206,7 @@ function ensureFavicon() {
 
 // ---------- Navigasi & footer ----------
 const NAV = [
-  ['/app', 'Chat'], ['/models', 'Models'], ['/privacy', 'Privacy'], ['/token', '$GHOST'], ['/proof', 'Proof'], ['/docs', 'Docs'],
+  ['/app', 'Chat'], ['/models', 'Models'], ['/privacy', 'Privacy'], ['/token', '$GHOST'], ['/proof', 'Proof'], ['/roadmap', 'Roadmap'], ['/docs', 'Docs'],
 ];
 
 export async function chrome() {
@@ -260,7 +260,7 @@ export async function chrome() {
           ${cfg.ghostToken ? `<p class="foot-ca mono">$GHOST <a class="link" href="${tokenUrl(cfg.ghostToken)}" target="_blank" rel="noopener">${cfg.ghostToken}</a></p>` : `<p class="foot-ca mono dim">$GHOST contract: not launched yet</p>`}
         </div>
         <div><h4>Product</h4><a href="/app">Chat</a><a href="/models">Models &amp; prices</a><a href="/privacy">Privacy inspector</a><a href="/account">Balance &amp; API key</a></div>
-        <div><h4>Verify</h4><a href="/proof">Proof</a><a href="/token">Ghost Credit ledger</a><a href="/api/stats" target="_blank" rel="noopener">/api/stats</a><a href="/v1/models" target="_blank" rel="noopener">/v1/models</a></div>
+        <div><h4>Verify</h4><a href="/proof">Proof</a><a href="/token">Ghost Credit ledger</a><a href="/roadmap">Roadmap</a><a href="/api/stats" target="_blank" rel="noopener">/api/stats</a><a href="/v1/models" target="_blank" rel="noopener">/v1/models</a></div>
         <div><h4>Community</h4>${ext(L.x, 'X')}${ext(L.telegram, 'Telegram')}${ext(L.github, 'GitHub')}${ext(L.pons, '$GHOST on Pons')}<a href="/docs">Docs</a><a href="/llms.txt">llms.txt</a></div>
       </div>
       <div class="legal"><span>Your GHOSTKEY balance is prepaid AI credit held by the GHOSTKEY server. It is not a deposit, an investment or a token.</span><span><a href="/docs#terms">Terms</a> · <a href="/docs#privacy">Privacy</a></span></div>

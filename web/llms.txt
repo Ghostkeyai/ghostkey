@@ -10,6 +10,7 @@ Chain: Robinhood Chain (chain id 4663). Explorer: https://robinhoodchain.blocksc
 - [Models](https://ghostkeyai.com/models): every model with a zero-retention provider, with OpenRouter prices
 - [Privacy](https://ghostkeyai.com/privacy): what we remove and the live request inspector
 - [$GHOST](https://ghostkeyai.com/token): Ghost Credit, the hourly ledger, and a wallet checker
+- [Roadmap](https://ghostkeyai.com/roadmap): what is shipped, what is live this week, and what comes next
 - [Proof](https://ghostkeyai.com/proof): every claim next to a way to check it (works without JavaScript)
 - [Docs](https://ghostkeyai.com/docs): API guide
 

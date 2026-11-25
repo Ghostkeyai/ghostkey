@@ -124,7 +124,7 @@ export async function renderProof() {
     'Ghost Credit is platform credit for AI, not money. It depends on how much $GHOST is traded. Nothing here promises a price or profit.',
   ];
 
-  const navLinks = [['/app', 'Chat'], ['/models', 'Models'], ['/privacy', 'Privacy'], ['/token', '$GHOST'], ['/proof', 'Proof'], ['/docs', 'Docs']];
+  const navLinks = [['/app', 'Chat'], ['/models', 'Models'], ['/privacy', 'Privacy'], ['/token', '$GHOST'], ['/proof', 'Proof'], ['/roadmap', 'Roadmap'], ['/docs', 'Docs']];
   const updated = new Date(d.updatedAt).toISOString().slice(0, 16).replace('T', ' ');
 
   return `<!doctype html>

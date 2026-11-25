@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roadmap · GHOSTKEY</title>
+<meta name="description" content="What GHOSTKEY has shipped, what is live this week, and what comes next. Every shipped item links to something you can open and check.">
+<meta name="theme-color" content="#121413">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/chrome.css">
+<link rel="stylesheet" href="/css/pages.css">
+<link rel="stylesheet" href="/css/roadmap.css">
+<meta property="og:title" content="Roadmap · GHOSTKEY">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:image" content="/img/og.png">
+</head>
+<body>
+<header id="nav"></header>
+<main>
+  <section class="page-head rm-head">
+    <div class="wrap">
+      <span class="kicker">Roadmap · updated as we ship</span>
+      <h1 class="h1">Built first. <span class="px">Promised second.</span></h1>
+      <p class="lead">Most of GHOSTKEY was running before $GHOST existed. This page shows what is done, what we are doing now and what comes next, in that order. A done item always links to something you can open.</p>
+
+      <!-- Rute si hantu: 4 stasiun, hantu berdiri di fase yang sedang berjalan -->
+      <div class="route" id="route" aria-label="Roadmap progress">
+        <div class="route-track" aria-hidden="true"><i class="route-fill"></i></div>
+        <a class="stop done" href="#shipped"><span class="dot"></span><b>01</b><span class="nm">Shipped</span><span class="ct" data-count="shipped"></span></a>
+        <a class="stop now" href="#now"><span class="dot"></span><span class="rm-ghost" aria-hidden="true"></span><b>02</b><span class="nm">Launch week</span><span class="ct" data-count="now"></span></a>
+        <a class="stop" href="#next"><span class="dot"></span><b>03</b><span class="nm">Next</span><span class="ct" data-count="next"></span></a>
+        <a class="stop" href="#later"><span class="dot"></span><b>04</b><span class="nm">Later</span><span class="ct" data-count="later"></span></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec phase" id="shipped" data-phase="shipped">
+    <div class="wrap phase-grid">
+      <div class="phase-h">
+        <span class="pnum">01</span>
+        <h2>Shipped</h2>
+        <p>Built before the token. All of it works today without holding anything.</p>
+        <span class="chip ok">Done</span>
+      </div>
+      <div class="items">
+        <article class="item done"><span class="st"></span><div><h3>200+ AI models, zero data retention</h3><p>Every request goes only to providers that keep nothing. The model list is read live from OpenRouter's zero-retention list, not picked by hand.</p><a class="proof-link" href="/models">See the model list</a></div></article>
+        <article class="item done"><span class="st"></span><div><h3>OpenRouter's price, no markup</h3><p>Each model shows its list price next to ours. The Compare button checks both numbers from your own browser.</p><a class="proof-link" href="/models">Compare prices</a></div></article>
+        <article class="item done"><span class="st"></span><div><h3>Privacy inspector</h3><p>See the exact request a model receives before you send anything. No wallet, no IP, no device in it.</p><a class="proof-link" href="/privacy">Open the inspector</a></div></article>
+        <article class="item done"><span class="st"></span><div><h3>API for developers</h3><p>An OpenAI-compatible endpoint with your own key, billed from the same balance as the chat.</p><a class="proof-link" href="/docs">Read the docs</a></div></article>
+        <article class="item done"><span class="st"></span><div><h3>GhostLedger on Robinhood Chain</h3><p>One Merkle root per hour for Ghost Credit. No owner, no upgrades, source verified on Sourcify.</p><a class="proof-link" id="lnk-ledger" href="/token#ledger">Verified source</a></div></article>
+        <article class="item done"><span class="st"></span><div><h3>Proof page and public code</h3><p>Every claim on this site comes with a script you can run yourself, and the code behind it is on GitHub.</p><a class="proof-link" href="/proof">Open the proof</a></div></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec phase" id="now" data-phase="now">
+    <div class="wrap phase-grid">
+      <div class="phase-h">
+        <span class="pnum">02</span>
+        <h2>Launch week</h2>
+        <p>The token is out. Now the part where trading fees turn into AI credit for holders.</p>
+        <span class="chip wait">Happening now</span>
+      </div>
+      <div class="items">
+        <article class="item" id="it-token"><span class="st"></span><div><h3>$GHOST live on Pons</h3><p id="tok-line">The contract address goes here the moment it exists.</p><span class="links" id="tok-links"></span></div></article>
+        <article class="item done"><span class="st"></span><div><h3>A Telegram agent, not a script</h3><p>Our bot answers product questions in the group, in your language, from the same facts as this site. It never talks price.</p><a class="proof-link" id="lnk-tg" href="/docs">Ask it something</a></div></article>
+        <article class="item" id="it-credit"><span class="st"></span><div><h3>First Ghost Credit payout</h3><p>Fees claimed every hour. 25% credited to holders of 100,000+ $GHOST, with that hour's root posted to GhostLedger.</p><span class="links"><a class="proof-link" href="/token#ledger">Watch the ledger</a><span class="live-note" id="credit-note"></span></span></div></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec phase" id="next" data-phase="next">
+    <div class="wrap phase-grid">
+      <div class="phase-h">
+        <span class="pnum">03</span>
+        <h2>Next</h2>
+        <p>What we build after the first payouts. Holding $GHOST should make the product itself better, not just pay credit.</p>
+        <span class="chip">Up next</span>
+      </div>
+      <div class="items">
+        <article class="item"><span class="st"></span><div><h3>More free messages for holders</h3><p>Wallets holding 100,000+ $GHOST get a bigger daily free allowance, checked on-chain when you sign in.</p></div></article>
+        <article class="item"><span class="st"></span><div><h3>Higher API limits for holders</h3><p>The same rule for API keys: more requests per minute when the key belongs to a holder wallet.</p></div></article>
+        <article class="item"><span class="st"></span><div><h3>GHOSTKEY in your Telegram DMs</h3><p>Message the bot privately and use any model from Telegram, with the same zero-retention routing, paid from your balance.</p></div></article>
+        <article class="item"><span class="st"></span><div><h3>Monthly fee report</h3><p>Fees in, Ghost Credit out, team share out. Totals read from the chain and posted on the $GHOST page, every transaction linked.</p></div></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec phase" id="later" data-phase="later">
+    <div class="wrap phase-grid">
+      <div class="phase-h">
+        <span class="pnum">04</span>
+        <h2>Later</h2>
+        <p>Ideas we want to build. No dates until the work starts.</p>
+        <span class="chip">No date yet</span>
+      </div>
+      <div class="items">
+        <article class="item"><span class="st"></span><div><h3>Encrypted history across devices</h3><p>Your chats on every device, encrypted with a key only your wallet can unlock. We store ciphertext and nothing else.</p></div></article>
+        <article class="item"><span class="st"></span><div><h3>Team workspaces</h3><p>One shared balance, a separate key per member, and a spend limit on each key.</p></div></article>
+        <article class="item"><span class="st"></span><div><h3>Holders pick the next models</h3><p>Holders choose which new models get added first. One vote per wallet, weighted by average balance like Ghost Credit.</p></div></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="rules">
+    <div class="wrap">
+      <div class="sec-h"><div><h2>How this page works</h2><p>Three rules so a roadmap stays a record, not a wish list.</p></div></div>
+      <ul class="limits">
+        <li><span><b>Done means you can open it.</b> An item moves to Shipped only with a link to the page, contract or script that shows it working.</span></li>
+        <li><span><b>No dates for work that hasn't started.</b> An item gets a date once it is being built, not before.</span></li>
+        <li><span><b>Dropped items stay visible.</b> If we cut something, it stays on this page, crossed out, with the reason.</span></li>
+      </ul>
+      <div class="rm-ask">
+        <p>Want something on this list? Ask in the group. The ideas people bring up most get built first.</p>
+        <span id="ask-links"></span>
+      </div>
+    </div>
+  </section>
+</main>
+<footer id="foot"></footer>
+<script type="module" src="/js/roadmap.js"></script>
+</body>
+</html>
