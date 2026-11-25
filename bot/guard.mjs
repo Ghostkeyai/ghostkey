@@ -97,11 +97,13 @@ const MARKETING = [
   // promosi channel "call" / grup VIP / proyek lain
   /\b(new|next|alpha|vip|gem)\s*calls?\b|\bcalls?\s*(channel|group|loading)\b|\bvip\s*(group|channel|chat|access)\b|\bdon'?t miss (out|this|it)\b|\b(join|check)\s*(my|our)\s*(channel|group|vip|calls?)\b|\bdropping (shortly|soon|now)\b|\bnext\s*\d{2,4}\s*x\b|\bdid\s*\d{2,4}\s*x\b/i,
   // jual vote/reaksi DEX Screener (roket/api), "bayar belakangan", "orang asli bukan bot"
+  // paket trending pihak lain ("diamond trend on dexvra", "WTF push mix trends") + mention bot lain
+  /\b(diamond|gold|golden|silver|premium|vip|mix|push|top\s*\d+|fast)\s*trend(s|ing)?\b|\btrend(s|ing)?\s+(on|at|via|with)\s+@?(?!(x|twitter|dex|dex\s*screener|dexscreener|ct|coingecko|cmc|pons|robinhood|uniswap|the|our|my|your|it)\b)[a-z]\w*|\b(look|check)\s+into\s+.{0,25}trend|@(?!ghostkeyai(_bot)?\b)\w*(trend|boost|vote|push|kol|shill|promo|call|dexvra)\w*\b|@(?!ghostkeyai_bot\b)\w+bot\b/i,
   /\b(dex\w*|dexscreener)\s*(rocket|vote|votes|reaction|reactions|flames?|fire|boost|boosts)\b|\b(rocket|flames?|fire)\s*(vote|votes|reactions?)\b|\b\d+\s*(votes?|reactions?|rockets?|flames?)\s*(before|first|then)\b|\bbefore\s*(you\s*)?pay\b|\bpay\s*(after|later)\b|\b(real|actual)\s*(people|users|humans)\s*(not|no)\s*(bots?|fake)\b|\bnot\s*bots?\s*not\s*fake\b/i,
 ];
 const isMarketing = (t) => MARKETING.some((r) => r.test(t));
 // nama akun penjual jasa (mis. "MORGAN DEX PRO", "Trend Booster"): kalau pesannya juga menyinggung vote/boost/bayar → langsung blokir
-const SELLER_NAME = /\b(dex\s*(pro|boost\w*|rocket|vote\w*|trend\w*|service\w*)|trend(ing)?\s*(boost\w*|service\w*|bot|pro)|boost(er|ing)?\s*(service\w*|pro)?|marketing|promoter|promotions?|listing\s*(agent|service)|volume\s*(bot|service)|kol\s*(agency|service))\b/i;
+const SELLER_NAME = /\b(kols?\s*(owner|manager|agency|service\w*|network|hub)|trend\w*\s*(owner|manager|agent|desk)|dex\s*(pro|boost\w*|rocket|vote\w*|trend\w*|service\w*)|trend(ing)?\s*(boost\w*|service\w*|bot|pro)|boost(er|ing)?\s*(service\w*|pro)?|marketing|promoter|promotions?|listing\s*(agent|service)|volume\s*(bot|service)|kol\s*(agency|service))\b/i;
 const SELLER_TALK = /\b(vote|votes|boost|rocket|flames?|trend\w*|pay|paid|price|package|deliver\w*|service|promo\w*|listing|volume)\b/i;
 const strikes = new Map(); // userId → { n, at } (memori saja)
 function strike(uid) {
@@ -127,6 +129,11 @@ async function onJoin(msg, user) {
   if (looksImpostor(user)) {
     await tg('banChatMember', { chat_id: chatId, user_id: user.id });
     console.log('[guard] peniru diblokir', user.id, nameOf(user));
+    return;
+  }
+  if (SELLER_NAME.test(`${nameOf(user)} ${user.username || ''}`)) {
+    await tg('banChatMember', { chat_id: chatId, user_id: user.id });
+    console.log('[guard] penjual jasa ditolak saat masuk', user.id, nameOf(user));
     return;
   }
   if (!STRICT && !CAPTCHA) {
