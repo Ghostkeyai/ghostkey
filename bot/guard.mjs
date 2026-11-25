@@ -445,6 +445,47 @@ async function buyWatcher() {
 }
 buyWatcher();
 
+// ---------- Pengumuman Ghost Credit per jam ----------
+// Tiap jam yang berstatus 'posted' (kredit dibagikan + root sudah on-chain) diumumkan sekali ke grup.
+// Saat bot mulai, jam yang sudah ada dianggap sudah diumumkan (tidak ada posting ulang sesudah restart).
+const hourLabel = (iso) => {
+  const a = new Date(iso), b = new Date(a.getTime() + 3600_000);
+  const hm = (d) => d.toISOString().slice(11, 16);
+  return `${a.getUTCDate()} ${a.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })} ${hm(a)}–${hm(b)} UTC`;
+};
+const money = (n) => '$' + (n >= 100 ? n.toFixed(0) : n.toFixed(2));
+async function creditAnnouncer() {
+  let last = null;
+  for (;;) {
+    try {
+      const list = await (await fetch(SITE_API + '/api/ledger?limit=6')).json();
+      const posted = (Array.isArray(list) ? list : []).filter((h) => h.status === 'posted' && h.txHash).sort((a, b) => a.hour - b.hour);
+      if (last == null) { last = posted.length ? posted.at(-1).hour : 0; console.log('[credit] pengumuman mulai sesudah jam', last); }
+      for (const h of posted.filter((x) => x.hour > last)) {
+        let total = null;
+        try { total = (await (await fetch(SITE_API + '/api/stats')).json()).holderCreditPaidUsd; } catch {}
+        const text = `👻 <b>Ghost Credit paid</b>\n\n`
+          + `Hour: <b>${hourLabel(h.startsAt)}</b>\n`
+          + `Holder pool: <b>${money(h.distributedUsd)}</b> (25% of creator fees)\n`
+          + `Paid to: <b>${h.entries}</b> wallet${h.entries === 1 ? '' : 's'} holding 100k+ $GHOST\n`
+          + (total != null ? `Paid so far: ${money(total)}\n` : '')
+          + `Merkle root: <a href="${SCAN}/tx/${h.txHash}">on-chain</a>\n\n`
+          + `Holders: sign in at ghostkeyai.com with the same wallet. The credit is already on your balance, ready for any model.`;
+        await tg('sendMessage', { chat_id: ALERT_CHAT, text, parse_mode: 'HTML', disable_web_page_preview: true,
+          reply_markup: { inline_keyboard: [
+            [{ text: 'Check my wallet', url: 'https://ghostkeyai.com/token#check' }, { text: 'This hour', url: `https://ghostkeyai.com/token#ledger` }],
+            [{ text: 'Use my credit', url: 'https://ghostkeyai.com/app' }],
+          ] } });
+        last = h.hour;
+        console.log('[credit] diumumkan jam', h.hour);
+        await sleep(1500);
+      }
+    } catch (e) { console.warn('[credit]', e.message); }
+    await sleep(60_000);
+  }
+}
+creditAnnouncer();
+
 for (;;) {
   const ups = await tg('getUpdates', { offset, timeout: 50, allowed_updates: ['message', 'callback_query', 'chat_member'] });
   if (!ups) { await sleep(3000); continue; }
