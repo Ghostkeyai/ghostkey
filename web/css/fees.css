@@ -1,0 +1,34 @@
+/* GHOSTKEY — panel creator fee live (halaman $GHOST) + baris ringkas (landing). */
+.fz-cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--line); background: var(--bg-2); }
+.fz-cells > div { padding: 18px 20px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.fz-cells > div + div { border-left: 1px solid var(--line); }
+.fz-cells b.num { font: 400 26px/1.1 var(--font-ui); letter-spacing: -.01em; color: var(--ink); overflow-wrap: anywhere; }
+.fz-cells small { font-size: 13px; color: var(--dim); }
+.fz-cells .proof-link { font-size: 12.5px; margin-top: 4px; }
+@media (max-width: 760px) { .fz-cells { grid-template-columns: minmax(0, 1fr); } .fz-cells > div + div { border-left: 0; border-top: 1px solid var(--line); } }
+
+.fz-split { border: 1px solid var(--line); border-top: 0; background: var(--bg-2); padding: 18px 20px; }
+.fz-bar { display: flex; height: 14px; margin: 12px 0 14px; background: var(--bg-3); }
+.fz-bar i { background: var(--mint); }
+.fz-bar u { flex: 1; background: repeating-linear-gradient(90deg, var(--gold) 0 6px, #ffd27acc 6px 8px); }
+.fz-legs { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.fz-legs .leg { display: grid; gap: 4px; }
+.fz-legs .leg b { font: 400 11px/1.3 var(--font-pixel); letter-spacing: .05em; text-transform: uppercase; }
+.fz-legs .leg.mint b { color: var(--mint); }
+.fz-legs .leg.gold b { color: var(--gold); }
+.fz-legs .num { font: 400 22px/1.1 var(--font-ui); color: var(--ink); }
+.fz-legs small { font-size: 13px; color: var(--dim); }
+@media (max-width: 560px) { .fz-legs { grid-template-columns: 1fr; } }
+.fz-note { margin-top: 12px; }
+
+/* baris ringkas di landing */
+.fz-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin-top: 16px; padding: 12px 16px; border: 1px solid var(--line); background: #171a19cc; font-size: 14px; color: var(--ink); }
+.fz-strip .num { font-weight: 500; }
+.fz-strip .mint { color: var(--mint); }
+.fz-strip .gold { color: var(--gold); }
+.fz-strip .dim { color: var(--dim); }
+.fz-strip .label { font: 400 11px/1 var(--font-pixel); letter-spacing: .05em; text-transform: uppercase; color: var(--mint); }
+.fz-strip .proof-link { margin-left: auto; font-size: 13px; }
+.fz-dot { width: 8px; height: 8px; background: var(--mint); animation: fz-blink 1.4s steps(2) infinite; }
+@keyframes fz-blink { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .fz-dot { animation: none; } }

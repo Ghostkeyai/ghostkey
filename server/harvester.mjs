@@ -81,6 +81,7 @@ export async function harvestOnce(depsIn, opts = {}) {
           out.hour, out.claimedWei, price, out.usdMicro, out.holderWei, out.holderMicro, out.ownerWei, out.ownerMicro,
           out.claimTx, JSON.stringify(out.txs), now());
     console.log('[panen]', JSON.stringify({ hour: out.hour, usd: out.usdMicro / 1e6, holderUsd: out.holderMicro / 1e6 }));
+    import('./fees-live.mjs').then((m) => m.invalidateFees()).catch(() => {});   // angka /api/fees langsung segar
     return out;
   } finally { running = false; }
 }

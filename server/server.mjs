@@ -28,6 +28,7 @@ const needAuth = (req, res) => {
 r.get('/api/config', async () => configData());
 r.get('/api/models', async () => (await getCatalog()).list.map(publicModel));
 r.get('/api/stats', async () => statsData());
+r.get('/api/fees', async () => (await import('./fees-live.mjs')).feesData());
 r.get('/api/proof', async () => proofData());
 
 // Inspector publik: tunjukkan persis badan yang AKAN dikirim ke OpenRouter. Tanpa login, gratis, tidak memanggil model.

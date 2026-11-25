@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="/css/base.css">
 <link rel="stylesheet" href="/css/chrome.css">
 <link rel="stylesheet" href="/css/pages.css">
+<link rel="stylesheet" href="/css/fees.css">
 <style>
   .contracts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 36px; }
   @media (max-width: 960px) { .contracts { grid-template-columns: 1fr; } }
@@ -94,6 +95,12 @@
     </div>
   </section>
 
+  <section class="sec" id="fees">
+    <div class="wrap">
+      <div class="sec-h"><div><h2>Creator fees, live</h2><p>What is waiting in the Pons curve and escrow right now, and what has already been split 25% to holders and 75% to the team. Read from the chain every minute.</p></div></div>
+      <div id="fees-live"><p class="loading-line">Reading the chain</p></div>
+    </div>
+  </section>
   <section class="sec" id="how">
     <div class="wrap">
       <div class="sec-h"><div><h2>How Ghost Credit works</h2><p>Four steps, every hour. Each one leaves a record you can check.</p></div></div>

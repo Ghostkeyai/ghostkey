@@ -5,6 +5,7 @@ import {
   api, chrome, getConfig, esc, usd, int, compact, short, pct, copy, pix, paintIcons, hourLabel, ago,
   addrUrl, txUrl, tokenUrl, blockUrl, sourcifyUrl, isAddr, ethCall, RPC_URLS,
 } from '/js/common.js';
+import { mountFees } from '/js/fees.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const ETHERS = 'https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.min.js';
@@ -311,3 +312,4 @@ async function init() {
 
 chrome();
 init();
+mountFees(document.getElementById('fees-live'));
