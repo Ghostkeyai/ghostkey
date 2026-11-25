@@ -2,6 +2,7 @@
 // ledger Ghost Credit, cek dompet, daftar bukti, potongan kode developer. Semua fetch gagal dengan tenang.
 import { api, getConfig, clientId, esc, usd, int, compact, copy, toast, chrome, ago, EXPLORER, addrUrl, txUrl } from './common.js';
 import { mountFees } from './fees.js';
+import { mountChart } from './chart.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -504,5 +505,6 @@ setupInspector();
 setupPrice();
 setupLedger();
 mountFees(document.getElementById('fees-strip'), { compact: true });
+mountChart(document.getElementById('dx-chart'));
 setupProof();
 setupDev();

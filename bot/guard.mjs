@@ -272,6 +272,89 @@ await tg('setMyCommands', { commands: [
   { command: 'proof', description: 'Every claim with its check' },
   { command: 'x', description: 'GHOSTKEY on X' },
 ] });
+
+// ---------- Notifikasi buy $GHOST (curve Pons) ----------
+// Membaca event CurveBuy langsung dari chain tiap ~10 dtk lalu memposting ke grup. Tanpa layanan pihak ketiga.
+// Env: ALERT_CHAT (bawaan @ghostkeyai), BUY_MIN_ETH (bawaan 0.003), ALERT_RPC (daftar dipisah koma).
+const ALERT_CHAT = process.env.ALERT_CHAT || '@ghostkeyai';
+const BUY_MIN_WEI = BigInt(Math.round(Number(process.env.BUY_MIN_ETH || 0.003) * 1e18));
+const RPCS = (process.env.ALERT_RPC || 'https://robinhood.api.pocket.network,https://robinhood.drpc.org').split(',').map((x) => x.trim()).filter(Boolean);
+const TOPIC_BUY = '0xec36bf571f136799e8dc0b0b8bea4b04d8bd3d43de838aab0d5fc21d4cbfc455';
+const SEL_TRACKED = '0xca52b0b7', SEL_GRAD = '0xe7c2b772';
+const SCAN = 'https://robinhoodchain.blockscout.com';
+const TEAM = new Set(['0x8546881839d06ea5b1c8d892897860d2cfabfed6', '0x8198d85f5c790093dd00e78761ffa9569aebe8f3']);
+async function rpc(method, params) {
+  let last;
+  for (const u of RPCS) {
+    try {
+      const r = await fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }), signal: AbortSignal.timeout(15_000) });
+      const j = await r.json();
+      if (j.error) throw new Error(j.error.message);
+      return j.result;
+    } catch (e) { last = e; }
+  }
+  throw last;
+}
+const fmtEth = (wei) => { const n = Number(wei) / 1e18; return n >= 1 ? n.toFixed(3) : n >= 0.01 ? n.toFixed(4) : n.toFixed(5); };
+const fmtInt = (n) => Math.round(n).toLocaleString('en-US');
+const shortA = (a) => a.slice(0, 6) + '…' + a.slice(-4);
+let feesInfo = { at: 0, v: null };
+async function siteFees() {
+  if (Date.now() - feesInfo.at < 60_000 && feesInfo.v) return feesInfo.v;
+  try { feesInfo = { at: Date.now(), v: await (await fetch(SITE_API + '/api/fees')).json() }; } catch {}
+  return feesInfo.v;
+}
+async function buyWatcher() {
+  let curve = null, from = null, gradAnnounced = false;
+  for (;;) {
+    try {
+      const ca = await officialCA();
+      if (!ca) { await sleep(30_000); continue; }
+      if (!curve) { const f = await siteFees(); curve = f?.curve || null; if (!curve) { await sleep(30_000); continue; } }
+      const head = Number(await rpc('eth_blockNumber', []));
+      if (from == null) { from = head + 1; console.log('[buy] memantau curve', curve, 'mulai blok', from); }
+      if (head >= from) {
+        const to = Math.min(head, from + 4999);
+        const logs = await rpc('eth_getLogs', [{ address: curve, topics: [TOPIC_BUY], fromBlock: '0x' + from.toString(16), toBlock: '0x' + to.toString(16) }]);
+        const big = logs.filter((l) => BigInt('0x' + l.data.slice(2, 66)) >= BUY_MIN_WEI);
+        if (big.length) {
+          const f = await siteFees();
+          const px = f?.ethUsd || null;
+          const tq = BigInt(await rpc('eth_call', [{ to: curve, data: SEL_TRACKED }, 'latest']));
+          const pct = Math.min(100, Number((tq * 10000n) / 4200000000000000000n) / 100);
+          for (const l of big.slice(-5)) {
+            const w = l.data.slice(2).match(/.{64}/g).map((h) => BigInt('0x' + h));
+            const [quoteIn, tokensOut] = w;
+            const buyer = '0x' + l.topics[1].slice(26);
+            const ghosts = '👻'.repeat(Math.max(1, Math.min(25, Math.floor(Number(quoteIn) / 1e18 / 0.02))));
+            const team = TEAM.has(buyer.toLowerCase());
+            const usdTxt = px ? ` (~$${((Number(quoteIn) / 1e18) * px).toFixed(2)})` : '';
+            const text = `${ghosts}\n<b>${team ? 'Team buyback' : '$GHOST buy'}</b>\n\n`
+              + `💰 ${fmtEth(quoteIn)} ETH${usdTxt}\n`
+              + `🔑 ${fmtInt(Number(tokensOut) / 1e18)} $GHOST\n`
+              + `👤 <a href="${SCAN}/address/${buyer}">${shortA(buyer)}</a> · <a href="${SCAN}/tx/${l.transactionHash}">tx</a>\n`
+              + `📈 Curve ${pct.toFixed(1)}% to Uniswap (${(Number(tq) / 1e18).toFixed(2)} / 4.2 ETH)\n\n`
+              + `<a href="https://ponsfamily.com/launchpad/${ca.toLowerCase()}">Buy on Pons</a> · <a href="https://dexscreener.com/robinhood/${ca}">Chart</a> · <a href="https://ghostkeyai.com/token">Ghost Credit</a>`;
+            await tg('sendMessage', { chat_id: ALERT_CHAT, text, parse_mode: 'HTML', disable_web_page_preview: true });
+            await sleep(1200);
+          }
+        }
+        from = to + 1;
+      }
+      // graduasi: umumkan sekali, lalu berhenti memantau curve (perdagangan pindah ke Uniswap v4)
+      if (!gradAnnounced && BigInt(await rpc('eth_call', [{ to: curve, data: SEL_GRAD }, 'latest'])) === 1n) {
+        gradAnnounced = true;
+        await tg('sendMessage', { chat_id: ALERT_CHAT, parse_mode: 'HTML', disable_web_page_preview: true,
+          text: `🎓 <b>$GHOST graduated.</b>\n\nThe Pons curve hit 4.2 ETH. Liquidity moved to Uniswap v4 and is locked. Same CA, and the 2% creator tax keeps funding Ghost Credit every hour.\n\n<a href="https://dexscreener.com/robinhood/${ca}">Chart</a> · <a href="https://ghostkeyai.com/token">Ghost Credit</a>` });
+        console.log('[buy] curve lulus — pemantau curve berhenti');
+        return;
+      }
+    } catch (e) { console.warn('[buy]', e.message); }
+    await sleep(10_000);
+  }
+}
+buyWatcher();
+
 for (;;) {
   const ups = await tg('getUpdates', { offset, timeout: 50, allowed_updates: ['message', 'callback_query', 'chat_member'] });
   if (!ups) { await sleep(3000); continue; }

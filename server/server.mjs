@@ -337,6 +337,7 @@ function cspFor(html) {
     "img-src 'self' data: blob: https:",
     "connect-src 'self' https://openrouter.ai https://rpc.mainnet.chain.robinhood.com https://robinhood-rpc.publicnode.com https://robinhoodchain.blockscout.com https://cdn.jsdelivr.net",
     "worker-src 'self' blob:",
+    "frame-src https://dexscreener.com",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

@@ -6,6 +6,7 @@ import {
   addrUrl, txUrl, tokenUrl, blockUrl, sourcifyUrl, isAddr, ethCall, RPC_URLS,
 } from '/js/common.js';
 import { mountFees } from '/js/fees.js';
+import { mountChart } from '/js/chart.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const ETHERS = 'https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.min.js';
@@ -133,7 +134,7 @@ async function showHour(hour, scroll = true) {
       <div><dt>Posted to GhostLedger</dt><dd>${row.txHash ? `<a class="link" href="${txUrl(row.txHash)}" target="_blank" rel="noopener">${esc(short(row.txHash, 10, 8))}</a>` : 'not posted'}</dd></div>
       <div><dt>4 balance readings (blocks)</dt><dd><span class="chain-links" style="justify-content:flex-end">${(d.blocks || []).map((b) => `<a href="${blockUrl(b)}" target="_blank" rel="noopener">#${esc(b)}</a>`).join('') || '—'}</span></dd></div>
       <div><dt>Fee claims this hour</dt><dd><span class="chain-links" style="justify-content:flex-end">${(d.feeTxs || row.feeTxs || []).map((h) => `<a href="${txUrl(h)}" target="_blank" rel="noopener">${esc(short(h, 8, 6))}</a>`).join('') || 'none'}</span></dd></div>
-      <div><dt>Excluded</dt><dd><span class="chain-links" style="justify-content:flex-end">${(d.excluded || []).map((a) => `<a href="${addrUrl(a)}" target="_blank" rel="noopener">${esc(short(a))}</a>`).join('') || '—'}</span></dd></div>
+      <div><dt>Excluded</dt><dd><span class="chain-links" style="justify-content:flex-end">${(d.excluded || []).map((x) => { const a = typeof x === 'string' ? x : x?.address; return a ? `<a href="${addrUrl(a)}" target="_blank" rel="noopener"${x?.label ? ` title="${esc(x.label)}"` : ''}>${esc(x?.label ? `${x.label} · ${short(a)}` : short(a))}</a>` : ''; }).join('') || '—'}</span></dd></div>
     </dl>
     <div style="margin-top:20px">${entries.length ? entriesTable(d.hour ?? hour, entries, d.root) : `<div class="empty">${pix('ghost', 36)}<span>No wallet was paid this hour${row.status === 'no_fees' ? ': there were no trading fees' : row.status === 'no_holders' ? ': no wallet qualified, so the pool rolls into the next hour' : ''}.</span></div>`}</div>
   </div>`;
@@ -313,3 +314,4 @@ async function init() {
 chrome();
 init();
 mountFees(document.getElementById('fees-live'));
+mountChart(document.getElementById('dx-chart'));
