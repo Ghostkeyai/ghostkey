@@ -46,7 +46,7 @@ async function main() {
     if (paid > 0) {
       done(cr);
       $('#credit-note').className = 'live-note ok';
-      $('#credit-note').textContent = `${usd(paid)} paid · ${s.hoursPosted} hours on-chain`;
+      $('#credit-note').textContent = `${usd(paid)} paid · ${s.hoursPosted} hour${s.hoursPosted === 1 ? '' : 's'} on-chain`;
     } else {
       wip(cr);
       $('#credit-note').textContent = 'In progress · live from /api/stats';
