@@ -345,7 +345,11 @@ const ALERT_CHAT = process.env.ALERT_CHAT || '@ghostkeyai';
 const BUY_MIN_WEI = BigInt(Math.round(Number(process.env.BUY_MIN_ETH || 0.003) * 1e18));
 const RPCS = (process.env.ALERT_RPC || 'https://robinhood.api.pocket.network,https://robinhood.drpc.org').split(',').map((x) => x.trim()).filter(Boolean);
 const TOPIC_BUY = '0xec36bf571f136799e8dc0b0b8bea4b04d8bd3d43de838aab0d5fc21d4cbfc455';
-const SEL_TRACKED = '0xca52b0b7', SEL_GRAD = '0xe7c2b772';
+const SEL_TRACKED = '0xca52b0b7', SEL_GRAD = '0xe7c2b772', SEL_RESERVES = '0x0902f1ac', SEL_SUPPLY = '0x18160ddd', SEL_BALANCE = '0x70a08231';
+// 4.7M / 23.6K · harga kecil dengan 4 angka penting · USD 2 desimal
+const fmtShort = (n) => (n >= 1e9 ? (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e8 ? 0 : 1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : n.toFixed(0));
+const fmtPrice = (n) => (n >= 0.01 ? n.toFixed(4) : n.toFixed(Math.min(12, 3 - Math.floor(Math.log10(n)))));
+const fmtUsd = (n) => (n >= 1000 ? Math.round(n).toLocaleString('en-US') : n.toFixed(2));
 const SCAN = 'https://robinhoodchain.blockscout.com';
 const TEAM = new Set(['0x8546881839d06ea5b1c8d892897860d2cfabfed6', '0x8198d85f5c790093dd00e78761ffa9569aebe8f3']);
 async function rpc(method, params) {
@@ -387,20 +391,41 @@ async function buyWatcher() {
           const px = f?.ethUsd || null;
           const tq = BigInt(await rpc('eth_call', [{ to: curve, data: SEL_TRACKED }, 'latest']));
           const pct = Math.min(100, Number((tq * 10000n) / 4200000000000000000n) / 100);
+          // harga spot curve (quoteReserve / tokenReserve) & MC = harga × totalSupply
+          let priceEth = null, mcEth = null;
+          try {
+            const r = (await rpc('eth_call', [{ to: curve, data: SEL_RESERVES }, 'latest'])).slice(2);
+            const qr = BigInt('0x' + r.slice(0, 64)), tr = BigInt('0x' + r.slice(64, 128));
+            priceEth = Number(qr) / Number(tr);
+            const sup = Number(BigInt(await rpc('eth_call', [{ to: ca, data: SEL_SUPPLY }, 'latest']))) / 1e18;
+            mcEth = priceEth * sup;
+          } catch {}
+          const buttons = { inline_keyboard: [
+            [{ text: 'Buy on Pons', url: `https://ponsfamily.com/launchpad/${ca.toLowerCase()}` }, { text: 'Chart', url: 'https://ghostkeyai.com/token#chart' }],
+            [{ text: 'DexScreener', url: `https://dexscreener.com/robinhood/${ca}` }, { text: 'Ghost Credit', url: 'https://ghostkeyai.com/token#fees' }],
+            [{ text: 'GHOSTKEY: 200+ AI models, none of you', url: 'https://ghostkeyai.com' }],
+          ] };
           for (const l of big.slice(-5)) {
             const w = l.data.slice(2).match(/.{64}/g).map((h) => BigInt('0x' + h));
             const [quoteIn, tokensOut] = w;
             const buyer = '0x' + l.topics[1].slice(26);
-            const ghosts = '👻'.repeat(Math.max(1, Math.min(25, Math.floor(Number(quoteIn) / 1e18 / 0.02))));
+            const ghosts = '👻'.repeat(Math.max(1, Math.min(20, Math.floor(Number(quoteIn) / 1e18 / 0.02))));
             const team = TEAM.has(buyer.toLowerCase());
-            const usdTxt = px ? ` (~$${((Number(quoteIn) / 1e18) * px).toFixed(2)})` : '';
-            const text = `${ghosts}\n<b>${team ? 'Team buyback' : '$GHOST buy'}</b>\n\n`
-              + `💰 ${fmtEth(quoteIn)} ETH${usdTxt}\n`
-              + `🔑 ${fmtInt(Number(tokensOut) / 1e18)} $GHOST\n`
-              + `👤 <a href="${SCAN}/address/${buyer}">${shortA(buyer)}</a> · <a href="${SCAN}/tx/${l.transactionHash}">tx</a>\n`
-              + `📈 Curve ${pct.toFixed(1)}% to Uniswap (${(Number(tq) / 1e18).toFixed(2)} / 4.2 ETH)\n\n`
-              + `<a href="https://ponsfamily.com/launchpad/${ca.toLowerCase()}">Buy on Pons</a> · <a href="https://dexscreener.com/robinhood/${ca}">Chart</a> · <a href="https://ghostkeyai.com/token">Ghost Credit</a>`;
-            await tg('sendMessage', { chat_id: ALERT_CHAT, text, parse_mode: 'HTML', disable_web_page_preview: true });
+            // pemegang baru = saldo $GHOST 0 tepat sebelum blok pembelian (butuh RPC arsip; gagal → tanpa label)
+            let fresh = false;
+            try {
+              const prev = BigInt(await rpc('eth_call', [{ to: ca, data: SEL_BALANCE + buyer.slice(2).padStart(64, '0') }, '0x' + (Number(l.blockNumber) - 1).toString(16)]));
+              fresh = prev === 0n;
+            } catch {}
+            const usd = (eth) => (px ? `$${fmtUsd(eth * px)}` : null);
+            const text = `<b>${team ? '$GHOST team buyback' : '$GHOST buy'}</b>\n${ghosts}\n\n`
+              + `Spent: <b>${fmtEth(quoteIn)} ETH</b>${px ? ` (${usd(Number(quoteIn) / 1e18)})` : ''}\n`
+              + `Got: <b>${fmtShort(Number(tokensOut) / 1e18)} GHOST</b>\n`
+              + `Wallet: <a href="${SCAN}/address/${buyer}">${shortA(buyer)}</a>${fresh ? ' · new holder' : ''}\n`
+              + (priceEth != null && px ? `Price: $${fmtPrice(priceEth * px)} · MC $${fmtShort(mcEth * px)}\n` : '')
+              + `Venue: Pons curve · ${pct.toFixed(1)}% to Uniswap\n`
+              + `<a href="${SCAN}/tx/${l.transactionHash}">View transaction</a>`;
+            await tg('sendMessage', { chat_id: ALERT_CHAT, text, parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: buttons });
             await sleep(1200);
           }
         }
