@@ -213,8 +213,9 @@ async function tryPost(hour, deps) {
     const rootOnChain = onChain?.root ?? onChain?.[0];
     if (rootOnChain && !/^0x0+$/.test(String(rootOnChain))) {
       const same = String(rootOnChain).toLowerCase() === String(row.root).toLowerCase();
-      q.run('UPDATE ledger_hours SET status=?, error=?, posted_at=? WHERE hour=?', same ? 'posted' : 'pending',
-            same ? null : 'root_mismatch_on_chain', dbNow(), hour);
+      const found = same ? await deps.ledger.findPostTx?.(hour).catch(() => null) : null;
+      q.run('UPDATE ledger_hours SET status=?, error=?, posted_at=?, tx_hash=COALESCE(?, tx_hash), block_number=COALESCE(?, block_number) WHERE hour=?', same ? 'posted' : 'pending',
+            same ? null : 'root_mismatch_on_chain', dbNow(), found?.txHash ?? null, found?.blockNumber ?? null, hour);
       return;
     }
     const r = await deps.ledger.postHour({ hour, root: row.root, poolMicro: row.pool_micro, entries: row.entries, uriHash: row.uri_hash, signer: deps.signer });
@@ -308,6 +309,12 @@ export async function tick(depsIn = {}) {
     const firstHarvest = q.one('SELECT MIN(hour) h FROM harvests').h;
     const start = Math.max(last != null ? last + 1 : Math.min(target, firstHarvest ?? target), target - 47);
     for (let h = start; h <= target; h++) done.push(await runHour(h, depsIn));
+    // Lengkapi hash tx untuk jam 'posted' yang belum punya (tx terkirim tapi balasan RPC hilang)
+    const ledgerMod = depsIn.ledger ?? (config.ledgerAddress ? await import('./chain/ledger.mjs').catch(() => null) : null);
+    for (const p of q.all("SELECT hour FROM ledger_hours WHERE status='posted' AND tx_hash IS NULL AND root IS NOT NULL ORDER BY hour DESC LIMIT 3")) {
+      const f = await ledgerMod?.findPostTx?.(p.hour).catch(() => null);
+      if (f) { q.run('UPDATE ledger_hours SET tx_hash=?, block_number=? WHERE hour=?', f.txHash, f.blockNumber, p.hour); console.log('[credit] hash tx jam', p.hour, 'dilengkapi'); }
+    }
     // Coba ulang posting jam yang masih 'pending'
     for (const p of q.all("SELECT hour FROM ledger_hours WHERE status='pending' ORDER BY hour LIMIT 5")) {
       if (!done.some((d) => d?.hour === p.hour)) done.push(await runHour(p.hour, depsIn));

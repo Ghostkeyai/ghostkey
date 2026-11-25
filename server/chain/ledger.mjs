@@ -174,6 +174,21 @@ export async function readHour(hour, { address, rpcUrl } = {}) {
   return { root, poolMicro, entries: Number(entries), postedAt: Number(postedAt) };
 }
 
+/** Cari transaksi yang memposting `hour` (event Posted, hour ter-index) dalam ±lookback blok terakhir → { txHash, blockNumber } | null. */
+export async function findPostTx(hour, { address, lookback = 120_000 } = {}) {
+  const { rpcCall } = await import('./rpc.mjs');
+  const addr = getAddress(address || ledgerAddress());
+  const topic0 = iface.getEvent('Posted').topicHash;
+  const topic1 = '0x' + keBigInt(hour, 'hour').toString(16).padStart(64, '0');
+  const head = Number(await rpcCall('eth_blockNumber', []));
+  for (let to = head; to > head - lookback; to -= 10_000) {
+    const from = Math.max(0, to - 9_999);
+    const logs = await rpcCall('eth_getLogs', [{ address: addr, topics: [topic0, topic1], fromBlock: '0x' + from.toString(16), toBlock: '0x' + to.toString(16) }]);
+    if (logs?.length) return { txHash: logs[0].transactionHash, blockNumber: Number(logs[0].blockNumber) };
+  }
+  return null;
+}
+
 /** On-chain proof check via eth_call. Never sends a transaction. */
 export async function verifyOnChain({ hour, wallet, creditMicro, proof, address, rpcUrl } = {}) {
   const bukti = (proof || []).map((p, i) => keBytes32(p, `proof[${i}]`));
