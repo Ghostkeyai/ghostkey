@@ -4,6 +4,9 @@
 // Env: GUARD_TOKEN (wajib), GHOSTKEY_API (bawaan http://127.0.0.1:4877), GUARD_CHAT (opsional: hanya layani grup ini, id angka),
 //      OPENROUTER_API_KEY (agent balas chat), GUARD_MODEL (bawaan anthropic/claude-haiku-5.5), GUARD_DAILY (maks balasan agent/hari, bawaan 600).
 // Agent: membalas saat di-mention, di-reply, atau ada pertanyaan yang relevan. Konteks obrolan hanya di memori (tidak ditulis ke disk).
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { classifyRequest, REQ_HINT } from './requests.mjs';
 const TOKEN = process.env.GUARD_TOKEN;
 if (!TOKEN) { console.error('GUARD_TOKEN kosong'); process.exit(1); }
 const API = `https://api.telegram.org/bot${TOKEN}/`;
@@ -192,10 +195,22 @@ async function onMessage(msg) {
       site: 'https://ghostkeyai.com — chat with 200+ AI models. Your wallet, IP and device never reach the model.',
       proof: 'Every claim with a way to check it: https://ghostkeyai.com/proof',
       x: 'https://x.com/ghostkeyai',
-      help: 'Commands: /ca (official contract) · /site · /proof · /x\nAdmins never DM first.',
+      help: 'Commands: /ca (official contract) · /site · /proof · /x · /request your idea\nAdmins never DM first.',
       start: 'Commands: /ca (official contract) · /site · /proof · /x\nAdmins never DM first.',
     };
     if (R[cmd]) { await tg('sendMessage', { chat_id: chatId, text: R[cmd], parse_mode: 'HTML', disable_web_page_preview: true, reply_to_message_id: msg.message_id, allow_sending_without_reply: true }); return; }
+    // /request <usulan> — semua member; selalu dijawab
+    if (cmd === 'request') {
+      const body = text.replace(/^\/request(@\w+)?\s*/i, '').trim();
+      if (body.length < 6) return say(msg, 'Write your idea after the command, for example: /request a dark mode for the chat');
+      return triage(msg, body, true);
+    }
+    // /requests — admin saja: daftar usulan bagus + suara roadmap
+    if (cmd === 'requests') {
+      const adm = msg.chat.type === 'private' ? false : (msg.sender_chat?.id === chatId || await isAdmin(chatId, from.id));
+      if (!adm) return;
+      return say(msg, requestsDigest());
+    }
   }
   if (msg.chat.type === 'private') { if (shouldAnswer(msg, text)) await agentReply(msg, text); return; }
   const anonAdmin = msg.sender_chat?.id === chatId || (msg.is_automatic_forward && msg.sender_chat?.type === 'channel');
@@ -251,7 +266,86 @@ async function onMessage(msg) {
     return sayTemp(chatId, addrs.length ? `${esc(nameOf(from))}, I removed a contract address to keep fakes out. The real $GHOST address is behind /ca.` : `${esc(nameOf(from))}, I removed a link that looked like a scam. If it was legit, an admin can share it.`, 20_000);
   }
   remember(chatId, nameOf(from), text);
+  // usulan fitur (tanpa perintah): dinilai dulu; kalau memang usulan, bot menjawab sebagai penilai, bukan sebagai obrolan
+  if (REQ_HINT.test(text) && text.length >= 12 && text.length <= 800 && await triage(msg, text, false)) return;
   if (shouldAnswer(msg, text)) await agentReply(msg, text);
+}
+
+// ---------- request member: catat, nilai, hitung suara (status di STATE_DIRECTORY, bertahan sesudah restart) ----------
+const say = (msg, text) => tg('sendMessage', { chat_id: msg.chat.id, text, parse_mode: 'HTML', disable_web_page_preview: true, reply_to_message_id: msg.message_id, allow_sending_without_reply: true });
+const STATE_FILE = join(process.env.STATE_DIRECTORY || join(process.cwd(), 'data-guard'), 'state.json');
+let STATE = { requests: [], roadmapVotes: {}, announced: null, nextN: 1 };
+try { STATE = { ...STATE, ...JSON.parse(readFileSync(STATE_FILE, 'utf8')) }; } catch {}
+function saveState() { try { mkdirSync(dirname(STATE_FILE), { recursive: true }); writeFileSync(STATE_FILE, JSON.stringify(STATE, null, 1)); } catch (e) { console.warn('[state]', e.message); } }
+const normTitle = (t) => t.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+const triageUser = new Map(); let triageHour = { h: 0, n: 0 };
+async function triage(msg, text, explicit) {
+  const uid = msg.from?.id || 0, now = Date.now();
+  if (!explicit && now - (triageUser.get(uid) || 0) < 120_000) return false;   // 1 penilaian otomatis / 2 menit / orang
+  const h = Math.floor(now / 3600_000); if (triageHour.h !== h) triageHour = { h, n: 0 };
+  if (triageHour.n >= 60) return false;                                         // pagu 60 penilaian / jam
+  triageUser.set(uid, now); triageHour.n++;
+  let v = null;
+  try { v = await classifyRequest(text, { orKey: OR_KEY }); } catch (e) { console.warn('[triage]', e.message); }
+  if (!v) { if (explicit) await say(msg, 'I could not review that right now. Try again in a minute.'); return explicit; }
+  const name = esc(nameOf(msg.from || { first_name: 'there' }));
+  if (v.kind !== 'feature_request' || v.verdict === 'none') { if (explicit) await say(msg, esc(v.reason || 'That reads like a question, not a feature idea.')); return explicit; }
+  const who = { id: uid, name: nameOf(msg.from || {}) };
+  if (v.verdict === 'good') {
+    const key = normTitle(v.title);
+    let r = STATE.requests.find((x) => normTitle(x.title) === key && x.status !== 'shipped');
+    if (r) {
+      if (!r.voters.some((x) => x.id === uid)) r.voters.push(who);
+      saveState();
+      await say(msg, `Good one, ${name}. That's already logged as request #${r.n} ("${esc(r.title)}"), so I added your vote. ${r.voters.length} so far.`);
+    } else {
+      r = { n: STATE.nextN++, title: v.title, text: text.slice(0, 400), by: who, voters: [who], at: new Date().toISOString(), status: 'candidate', reason: v.reason };
+      STATE.requests.push(r); saveState();
+      await say(msg, `Good one, ${name}. Logged as request #${r.n}: "${esc(r.title)}". ${esc(v.reason)} The team reviews these, and when something ships it's posted here.`);
+    }
+    console.log('[request] bagus', r.n, r.title);
+    return true;
+  }
+  if (v.verdict === 'on_roadmap') {
+    const k = v.match || v.title;
+    const set = new Set(STATE.roadmapVotes[k] || []); set.add(uid); STATE.roadmapVotes[k] = [...set]; saveState();
+    await say(msg, `${esc(v.reason)} I counted your vote for "${esc(k)}", ${name}.`);
+    return true;
+  }
+  if (v.verdict === 'conflicts_privacy') { await say(msg, `${esc(v.reason)} The privacy promise comes first, so this one won't be built.`); return true; }
+  // permintaan pasar / samar: dijawab hanya bila lewat /request (supaya grup tidak berisik)
+  if (explicit) { await say(msg, esc(v.reason)); return true; }
+  return false;
+}
+function requestsDigest() {
+  const open = STATE.requests.filter((r) => r.status !== 'shipped').sort((a, b) => b.voters.length - a.voters.length).slice(0, 12);
+  const rv = Object.entries(STATE.roadmapVotes).sort((a, b) => b[1].length - a[1].length).slice(0, 8);
+  return `<b>Member requests (good, not built yet)</b>\n${open.length ? open.map((r) => `#${r.n} ${esc(r.title)} · ${r.voters.length} vote${r.voters.length === 1 ? '' : 's'} · by ${esc(r.by.name)}`).join('\n') : 'None yet.'}\n\n<b>Votes for roadmap items</b>\n${rv.length ? rv.map(([k, v]) => `${esc(k)} · ${v.length}`).join('\n') : 'None yet.'}`;
+}
+
+// ---------- pengumuman fitur baru (sumber: /api/changelog di situs) ----------
+// Entri yang sudah ada saat bot pertama kali jalan dianggap sudah diumumkan; entri baru diumumkan sekali.
+async function changelogAnnouncer() {
+  for (;;) {
+    try {
+      const list = await (await fetch(SITE_API + '/api/changelog')).json();
+      const items = Array.isArray(list) ? list : [];
+      if (STATE.announced == null) { STATE.announced = items.map((x) => x.id); saveState(); console.log('[changelog] awal:', items.length, 'entri dianggap sudah diumumkan'); }
+      for (const it of items.filter((x) => !STATE.announced.includes(x.id)).reverse()) {
+        const req = it.request ? STATE.requests.find((r) => r.n === Number(it.request)) : null;
+        if (req) { req.status = 'shipped'; req.shippedAt = new Date().toISOString(); }
+        const text = `🆕 <b>Shipped: ${esc(it.title)}</b>\n\n${esc(it.what)}`
+          + (req ? `\n\nRequested by ${esc(req.by.name)} in this group (request #${req.n}, ${req.voters.length} vote${req.voters.length === 1 ? '' : 's'}).` : '')
+          + (it.note ? `\n\n${esc(it.note)}` : '');
+        await tg('sendMessage', { chat_id: ALERT_CHAT, text, parse_mode: 'HTML', disable_web_page_preview: true,
+          reply_markup: it.link ? { inline_keyboard: [[{ text: it.cta || 'Try it', url: it.link }, { text: 'Roadmap', url: 'https://ghostkeyai.com/roadmap' }]] } : undefined });
+        STATE.announced.push(it.id); saveState();
+        console.log('[changelog] diumumkan', it.id);
+        await sleep(2000);
+      }
+    } catch (e) { console.warn('[changelog]', e.message); }
+    await sleep(120_000);
+  }
 }
 
 
@@ -336,6 +430,7 @@ await tg('setMyCommands', { commands: [
   { command: 'site', description: 'ghostkeyai.com' },
   { command: 'proof', description: 'Every claim with its check' },
   { command: 'x', description: 'GHOSTKEY on X' },
+  { command: 'request', description: 'Suggest a feature (reviewed and logged)' },
 ] });
 
 // ---------- Notifikasi buy $GHOST (curve Pons) ----------
@@ -485,6 +580,7 @@ async function creditAnnouncer() {
   }
 }
 creditAnnouncer();
+changelogAnnouncer();
 
 for (;;) {
   const ups = await tg('getUpdates', { offset, timeout: 50, allowed_updates: ['message', 'callback_query', 'chat_member'] });

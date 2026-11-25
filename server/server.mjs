@@ -29,6 +29,8 @@ r.get('/api/config', async () => configData());
 r.get('/api/models', async () => (await getCatalog()).list.map(publicModel));
 r.get('/api/stats', async () => statsData());
 r.get('/api/fees', async () => (await import('./fees-live.mjs')).feesData());
+// Changelog fitur (server/changelog.json, terbaru di atas) — dipakai halaman roadmap & bot grup untuk pengumuman "Shipped"
+r.get('/api/changelog', async () => { try { return JSON.parse(await readFile(join(ROOT, 'server', 'changelog.json'), 'utf8')); } catch { return []; } });
 r.get('/api/proof', async () => proofData());
 
 // Inspector publik: tunjukkan persis badan yang AKAN dikirim ke OpenRouter. Tanpa login, gratis, tidak memanggil model.

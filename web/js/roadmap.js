@@ -53,6 +53,13 @@ async function main() {
     }
   } catch { wip(cr); }
 
+  // log fitur terkirim dari /api/changelog
+  try {
+    const log = await api('/api/changelog');
+    $('#shiplog').innerHTML = (Array.isArray(log) && log.length) ? log.map((it) => `<li><span class="d">${esc(it.date || '')}</span>
+      <div><h3>${esc(it.title)}</h3><p>${esc(it.what)}</p>${it.requestedBy ? `<span class="by">Suggested in the group by ${esc(it.requestedBy)}</span>` : ''}</div>
+      ${it.link ? `<a class="proof-link" href="${esc(it.link)}"${/^https?:\/\/(?!ghostkeyai\.com)/.test(it.link) ? ' target="_blank" rel="noopener"' : ''}>${esc(it.cta || 'Open')}</a>` : '<span></span>'}</li>`).join('') : '<li class="loading-line">Nothing logged yet.</li>';
+  } catch { $('#shiplog').innerHTML = '<li class="loading-line">Could not load the log.</li>'; }
   // fase "sekarang" juga bertanda berjalan kecuali semuanya sudah selesai
   counts();
   const ask = [];

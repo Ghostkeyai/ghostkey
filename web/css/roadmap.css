@@ -80,3 +80,13 @@
   .stop .ct { grid-column: 2; }
   .rm-ghost { left: auto; right: 0; top: -6px; }
 }
+
+/* log fitur yang sudah dikirim */
+.shiplog { list-style: none; border: 1px solid var(--line); }
+.shiplog li { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; gap: 18px; align-items: baseline; padding: 16px 20px; background: var(--bg-2); }
+.shiplog li + li { border-top: 1px solid var(--line); }
+.shiplog .d { font: 400 12px var(--font-mono); color: var(--faint); }
+.shiplog h3 { font: 400 16px/1.3 var(--font-ui); color: var(--ink); }
+.shiplog p { font-size: 14px; color: var(--dim); margin-top: 4px; }
+.shiplog .by { font: 400 11px/1.3 var(--font-pixel); letter-spacing: .05em; text-transform: uppercase; color: var(--gold); margin-top: 6px; display: block; }
+@media (max-width: 680px) { .shiplog li { grid-template-columns: minmax(0, 1fr); gap: 6px; } }
