@@ -306,6 +306,7 @@ async function onMessage(msg) {
   // lapis kedua: pesan yang lolos pola dibaca AI (hanya member baru atau yang memuat kata rawan)
   markSeen(from.id, false);
   if (await aiFlag(msg, text)) return;
+  STATE.clean ||= {}; STATE.clean[from.id] = (STATE.clean[from.id] || 0) + 1; seenDirty = true;
   remember(chatId, nameOf(from), text);
   logChat(from, text);
   // usulan fitur (tanpa perintah): dinilai dulu; kalau memang usulan, bot menjawab sebagai penilai, bukan sebagai obrolan
@@ -485,7 +486,7 @@ async function aiJudge(text) {
         messages: [{ role: 'system', content: `You moderate the Telegram group of GHOSTKEY, a private AI chat app with the token $GHOST. Classify ONE message.
 "promo" = someone selling or advertising a service or another project: marketing, promotion, KOLs, trending, listings, volume, votes, calls/VIP/gem channels, "DM me/us", collab or partnership pitches from outsiders, recruiting, another token or group.
 "scam" = fake support or admin, airdrop/claim/reward bait, wallet recovery, investment or profit schemes, asking people to DM or click to fix something.
-"ok" = everything else, including members hyping $GHOST, asking about price, marketing plans, listings or partnerships for GHOSTKEY, complaining, joking, or saying they will shill it themselves.
+"ok" = everything else, including members hyping $GHOST, asking about price, marketing plans, listings or partnerships for GHOSTKEY, giving the GHOSTKEY team advice or feedback (about marketing, content, videos, the website, growing the community), complaining, joking, or saying they will shill it themselves.
 When unsure, answer ok. Reply with JSON only: {"label":"ok|promo|scam"}` },
           { role: 'user', content: text.slice(0, 1200) }] }),
     });
@@ -499,21 +500,21 @@ When unsure, answer ok. Reply with JSON only: {"label":"ok|promo|scam"}` },
 async function aiFlag(msg, text) {
   const from = msg.from, chatId = msg.chat.id;
   if (msg.chat.type === 'private' || !text || text.length < 20 || text.startsWith('/')) return false;
+  // 26 Nov: AI salah menilai saran marketing dari member asli (AZ) sebagai promo lalu memblokirnya.
+  // Sejak itu: (a) balasan ke admin/bot = obrolan dengan tim, tidak dinilai AI;
+  // (b) member yang sudah ≥3 pesan bersih tidak dinilai AI (pola regex tetap jalan);
+  // (c) AI hanya menghapus + memberi tahu pemilik, TIDAK PERNAH memblokir. Blokir hanya dari pola pasti.
+  const rt = msg.reply_to_message?.from;
+  if (rt && (rt.id === me?.id || await isAdmin(chatId, rt.id).catch(() => false))) return false;
+  if ((STATE.clean?.[from.id] || 0) >= 3) return false;
   const fresh = Date.now() - (STATE.seen?.[from.id] || 0) < NEW_MS;
   if (!fresh && !RISKY.test(text)) return false;
   const label = await aiJudge(text);
   if (label !== 'promo' && label !== 'scam') return false;
   await tg('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
-  const n = strike(from.id);
-  if (n >= 2 || label === 'scam') {
-    await tg('banChatMember', { chat_id: chatId, user_id: from.id });
-    console.log(`[guard] AI ${label} diblokir`, from.id, nameOf(from));
-    ownerNote(`🛡️ AI memblokir ${label}: ${nameOf(from)} — "${text.slice(0, 120)}"`);
-    return sayTemp(chatId, label === 'scam' ? `Removed a likely scam from ${esc(nameOf(from))}. Admins never DM first, and the only $GHOST address is behind /ca.` : `${esc(nameOf(from))} was removed for repeated promo offers.`, 20_000).then(() => true);
-  }
-  console.log(`[guard] AI ${label} dihapus (peringatan 1)`, from.id, nameOf(from));
-  ownerNote(`🛡️ AI menghapus promo: ${nameOf(from)} — "${text.slice(0, 120)}"`);
-  await sayTemp(chatId, `${esc(nameOf(from))}, promo and "DM me" offers aren't allowed here. A second one gets you removed.`, 20_000);
+  console.log(`[guard] AI ${label} dihapus (tanpa blokir)`, from.id, nameOf(from));
+  ownerNote(`🛡️ AI menghapus ${label} (tanpa blokir): ${nameOf(from)} — "${text.slice(0, 160)}"\nKalau salah, pulihkan dengan membalas member itu di grup.`);
+  await sayTemp(chatId, label === 'scam' ? `Removed a message that looked like a scam. Admins never DM first, and the only $GHOST address is behind /ca.` : `${esc(nameOf(from))}, outside promo and "DM me" offers aren't allowed here.`, 20_000);
   return true;
 }
 
