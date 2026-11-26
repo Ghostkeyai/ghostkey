@@ -681,7 +681,7 @@ async function init() {
   $('#export').onclick = () => {
     const list = store.all(), ps = personas.all();
     if (!list.length && !ps.length) return toast('No chats or personas to export yet');
-    downloadJson({ exportedAt: new Date().toISOString(), note: 'GHOSTKEY chats and personas from this browser. Our server never stored them.', chats: list, personas: ps }, `ghostkey-chats-${new Date().toISOString().slice(0, 10)}.json`);
+    downloadJson({ exportedAt: new Date().toISOString(), note: 'GHOSTKEY chats and personas saved in this browser. Our database has no column for prompts, answers or persona instructions.', chats: list, personas: ps }, `ghostkey-chats-${new Date().toISOString().slice(0, 10)}.json`);
   };
   const wipe = $('#wipe');
   wipe.onclick = () => {
