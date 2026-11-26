@@ -17,6 +17,7 @@ Chain: Robinhood Chain (chain id 4663). Explorer: https://robinhoodchain.blocksc
 ## How it works
 - Privacy: every request to OpenRouter is built in one function (server/privacy.mjs). It uses GHOSTKEY's shared key and fixed headers. Client IP, user agent, cookies, wallet, account id and the `user`, `metadata` and `provider` fields are never forwarded. Every request forces `provider: { zdr: true, data_collection: "deny" }`.
 - Storage: the database keeps model name, token counts, cost and time per call. There is no column for prompts or answers. Signed-in users can download everything stored about them at /api/me/export.
+- Personas: a persona is a name, a model and instructions, saved in the browser under `localStorage.gk_personas`, not in our database. In a chat that uses one, the instructions are sent as the first `system` message of each request, so they pass through our server to the model like any prompt, and are not stored. To check: open /app, Personas → + New, pick a starter, Save. The persona shows in the sidebar list and as a chip above the prompt, and `localStorage.getItem('gk_personas')` returns it. Send a message and open "What we sent": the first message is marked as your persona. If the browser blocks storage, the persona is kept for that tab only and the app says so.
 - Price: the amount billed per call is the `usage.cost` OpenRouter returns for that call. Each answer ends with a receipt that shows tokens, rates, cost and the exact (redacted) request we forwarded.
 - Top-ups: USDG or ETH on Robinhood Chain to the treasury address, credited 1:1 in USD. Fee 0%.
 - Ghost Credit: each hour the server claims the $GHOST creator fee from Pons. 25% goes to the treasury as the holder pool and 75% to the owner wallet. Holders with an average of at least the minimum $GHOST over four snapshots (:15, :30, :45, :60) get a pro-rata share as AI balance. Each hour is published as JSON and its Merkle root is posted to the GhostLedger contract.
@@ -35,6 +36,7 @@ Chain: Robinhood Chain (chain id 4663). Explorer: https://robinhoodchain.blocksc
 - [Ledger](https://ghostkeyai.com/api/ledger): latest Ghost Credit hours; `/api/ledger/<hour>` for one hour, `/api/ledger/<hour>/raw` for its exact bytes
 - [Holder](https://ghostkeyai.com/api/holder/0x0000000000000000000000000000000000000000): credits and Merkle proofs for a wallet
 - [Proof](https://ghostkeyai.com/api/proof): contract and wallet addresses with explorer links
+- [Fee report](https://ghostkeyai.com/report): monthly fees claimed, holder and team shares, gas kept, Ghost Credit paid, and nine checks. JSON at `/api/report/<YYYY-MM>`, one CSV row per claim at `/api/report/<YYYY-MM>.csv`, months at `/api/report`. Re-check: `node tools/verify/month-report.mjs --month <YYYY-MM> --chain`
 - `POST /api/inspect` with an OpenAI-style body: shows the exact request GHOSTKEY would send, without calling a model
 
 ## Limits

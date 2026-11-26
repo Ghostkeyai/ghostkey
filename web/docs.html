@@ -66,6 +66,8 @@
           <p>Send your key as a Bearer token: <code class="inline">Authorization: Bearer gk_live_…</code>. Keys start with <code class="inline">gk_live_</code>.</p>
           <p>We show a key once, when you create it. We keep only a hash and the first characters, so we cannot show it again. Lost a key? Create a new one on your <a class="link" href="/account#keys">account page</a>.</p>
           <p>Every key bills the balance of the wallet that made it. A new account gets <b data-free>10</b> free calls on low-cost models, so you can test before you top up.</p>
+          <p><b>Limits per key.</b> On your <a class="link" href="/account#keys">account page</a>, give any key a name, a daily limit in USD and an expiry date (1 day to 1 year). The limit counts what that key spends from your balance in each UTC day. Requests are sized to fit what is left, parallel calls included, so a key never goes over. At the limit it answers <code class="inline">402 key_daily_limit_reached</code> until 00:00 UTC. After the expiry date it answers <code class="inline">401 key_expired</code>. Your other keys and the chat are not affected.</p>
+          <p>Calls on a key with a limit return what is left today in the <code class="inline">X-Ghostkey-Key-Limit-Left</code> header and in <code class="inline">ghostkey_receipt.keyDailyLimitLeftUsd</code>.</p>
         </section>
 
         <section id="endpoints">
@@ -120,6 +122,8 @@
           <p>Errors use the OpenAI shape: <code class="inline">{"error": {"message": "…", "code": "…"}}</code>.</p>
           <div class="table-scroll"><table class="table"><thead><tr><th>HTTP</th><th>Code</th><th>Meaning</th></tr></thead><tbody>
             <tr><td class="mono">401</td><td class="mono">invalid_api_key</td><td>Key missing, wrong or replaced.</td></tr>
+            <tr><td class="mono">401</td><td class="mono">key_expired</td><td>The key passed its expiry date. Extend it or make a new one on your account page.</td></tr>
+            <tr><td class="mono">402</td><td class="mono">key_daily_limit_reached</td><td>The key spent its daily limit. It works again at 00:00 UTC, or raise the limit.</td></tr>
             <tr><td class="mono">402</td><td class="mono">insufficient_balance</td><td>Balance too low for this call. Add balance or lower max_tokens.</td></tr>
             <tr><td class="mono">402</td><td class="mono">model_needs_balance</td><td>Free calls work only on low-cost models.</td></tr>
             <tr><td class="mono">400</td><td class="mono">bad_model</td><td>Unknown model id, or no zero-retention provider for it right now.</td></tr>
@@ -159,18 +163,19 @@
 
         <section id="privacy">
           <h2>Privacy policy</h2>
-          <p class="updated">Plain-language summary · last updated 25 Nov 2026</p>
+          <p class="updated">Plain-language summary · last updated 26 Nov 2026</p>
           <h3>What we store</h3>
           <ul class="plain">
             <li><b>Your wallet address</b>, once you sign in. Top-ups and Ghost Credit need it.</li>
             <li><b>Your balance</b>, your top-up transactions and your Ghost Credit rows.</li>
             <li><b>Usage rows</b>: model, tokens in and out, cost, time, whether it came from chat or the API, and OpenRouter's generation ID for that answer (an ID, not the content).</li>
-            <li><b>API keys</b>: a hash and the first characters, never the full key.</li>
+            <li><b>API keys</b>: a hash and the first characters, never the full key, plus any name, daily limit or expiry you set, and one running total of what each key spent today (deleted after two days).</li>
             <li><b>A random browser ID</b> stored in your browser, to count your free messages.</li>
           </ul>
           <h3>What we never store</h3>
           <ul class="plain">
             <li>Your prompts and the answers. Chat history lives only in your browser.</li>
+            <li>Your personas. Their names and instructions live only in your browser. When a chat uses one, its instructions travel with each request like any message, and are not kept.</li>
             <li>Your IP address and your device. To limit free messages, we count requests per IP per day using a scrambled code (a hash with a secret that changes every time the server restarts). These counts are deleted within 2 days.</li>
           </ul>
           <h3>Who else sees your request</h3>

@@ -276,6 +276,7 @@ export function mountGhost(host, { pixel = 4 } = {}) {
 
   // input: ikuti penunjuk, ketuk = melambai
   const m = { x: 0, y: 0, sx: 0, sy: 0 };
+  const bias = { x: 0, y: 0, sx: 0, sy: 0 };   // arah pandang bawaan per tempat (pendamping gulir)
   const onMove = (e) => {
     const r = host.getBoundingClientRect();
     m.x = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / (innerWidth * 0.5)));
@@ -333,8 +334,9 @@ export function mountGhost(host, { pixel = 4 } = {}) {
 
     // menoleh ke arah penunjuk
     m.sx += (m.x - m.sx) * 0.06; m.sy += (m.y - m.sy) * 0.06;
-    ghost.root.rotation.y = m.sx * 0.55;
-    ghost.root.rotation.x = m.sy * 0.16;
+    bias.sx += (bias.x - bias.sx) * 0.05; bias.sy += (bias.y - bias.sy) * 0.05;
+    ghost.root.rotation.y = Math.max(-0.9, Math.min(0.9, (m.sx * 0.7 + bias.sx) * 0.55));
+    ghost.root.rotation.x = (m.sy * 0.8 + bias.sy) * 0.16;
 
     renderer.setRenderTarget(rt); renderer.render(scene, camera);
     renderer.setRenderTarget(null); renderer.render(postScene, postCam);
@@ -360,6 +362,8 @@ export function mountGhost(host, { pixel = 4 } = {}) {
 
   return {
     wave: greet,
+    hop() { hopAt = now(); },
+    look(x = 0, y = 0) { bias.x = x; bias.y = y; },
     dispose() {
       renderer.setAnimationLoop(null); io.disconnect(); ro.disconnect();
       removeEventListener('pointermove', onMove); document.removeEventListener('visibilitychange', sync);

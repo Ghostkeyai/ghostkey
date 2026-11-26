@@ -1,5 +1,29 @@
 [
   {
+    "id": "2026-11-26-fee-report",
+    "date": "2026-11-26",
+    "title": "Monthly fee report you can re-check",
+    "what": "Every $GHOST creator fee claimed this month in one page: the ETH claimed, the 25% sent to the treasury for holders, the 75% sent to the team, and the gas kept for transfers. Then how the holder share became Ghost Credit, hour by hour. Nine checks run before the page shows, and one command re-runs them all, including every transfer and GhostLedger root on Robinhood Chain.",
+    "link": "https://ghostkeyai.com/report",
+    "cta": "Open the report"
+  },
+  {
+    "id": "2026-11-26-personas",
+    "date": "2026-11-26",
+    "title": "Personas that stay in your browser",
+    "what": "Save a model with your own instructions and start a chat with it in one tap. Personas are saved in this browser only, not in our database. The instructions go out as the first message of each request, passing through our server like your prompt without being kept, and \"What we sent\" marks them so you see exactly what the model receives. Download one as a file to use it on another device.",
+    "link": "https://ghostkeyai.com/app",
+    "cta": "Make a persona"
+  },
+  {
+    "id": "2026-11-26-key-limits",
+    "date": "2026-11-26",
+    "title": "Spend limits and expiry on API keys",
+    "what": "Give any API key a name, a daily USD limit and an expiry date. A key at its limit stops until 00:00 UTC, and an expired key stops for good, so you can hand one to an agent or a script without risking your whole balance. Parallel calls are counted too.",
+    "link": "https://ghostkeyai.com/account#keys",
+    "cta": "Set a limit"
+  },
+  {
     "id": "2026-11-26-receipts",
     "date": "2026-11-26",
     "title": "A receipt for every answer",

@@ -7,10 +7,10 @@ import { config, ROOT, microToUsd, usdToMicro } from './config.mjs';
 import { q, schemaColumns } from './db.mjs';
 import { Router, sendJson, readJson, clientIp, rateLimit } from './http.mjs';
 import { makeNonce, verifySignIn, sessionCookie, accountFromSession, logout, normWallet,
-  listApiKeys, createApiKey, revokeApiKey, accountFromBearer } from './auth.mjs';
+  listApiKeys, createApiKey, revokeApiKey, updateApiKey, resolveBearer } from './auth.mjs';
 import { getCatalog, modelInfo, publicModel } from './openrouter.mjs';
 import { freeLeft, apiClientId, holderClientId, quoteCredit, creditDeposit, pruneDaily } from './billing.mjs';
-import { runChatStream, runChatJson, cleanMessages, STORED } from './chat.mjs';
+import { runChatStream, runChatJson, cleanMessages, STORED, errText } from './chat.mjs';
 import { buildUpstream, redactForDisplay, STRIPPED, ZDR_LIST_URL, incomingNotSent, droppedFields, FORCED_PROVIDER } from './privacy.mjs';
 import { ledgerList, ledgerHour, ledgerHourRaw, holderCredits, startCreditScheduler, runHour } from './credit.mjs';
 import { startHarvester, harvesterReady } from './harvester.mjs';
@@ -205,8 +205,16 @@ r.get('/api/me', async (req, res) => {
 r.post('/api/me/apikey', async (req, res) => {
   const a = needAuth(req, res); if (!a) return;
   if (!rateLimit(`key:${a.id}`, 10, 3600_000)) return [429, { error: 'slow_down' }];
-  const k = createApiKey(a.id);
+  const k = createApiKey(a.id, await readJson(req).catch(() => ({})));
   return k.error ? [400, k] : k;
+});
+// Ubah nama, batas belanja harian, atau kedaluwarsa kunci yang sudah ada
+r.post('/api/me/apikey/limits', async (req, res) => {
+  const a = needAuth(req, res); if (!a) return;
+  if (!rateLimit(`keylim:${a.id}`, 60, 3600_000)) return [429, { error: 'slow_down' }];
+  const b = await readJson(req);
+  const k = updateApiKey(a.id, b.prefix, b);
+  return k.error ? [k.error === 'not_found' ? 404 : 400, k] : k;
 });
 r.post('/api/me/apikey/revoke', async (req, res) => {
   const a = needAuth(req, res); if (!a) return;
@@ -236,8 +244,8 @@ r.get('/api/me/export', async (req, res, p, url) => {
     exportedAt: new Date().toISOString(),
     note: 'This is every row in the GHOSTKEY database linked to your account. Prompts, answers, IP addresses and device details are not stored, so they cannot appear here.',
     account: { wallet: a.wallet, status: a.status, balanceUsd: microToUsd(a.balance_micro), heldUsd: microToUsd(a.held_micro), createdAt: a.created_at },
-    apiKeys: q.all('SELECT prefix, created_at, revoked_at FROM api_keys WHERE account_id=? ORDER BY id', a.id)
-      .map((k) => ({ prefix: k.prefix, createdAt: k.created_at, revokedAt: k.revoked_at })),
+    apiKeys: q.all('SELECT prefix, created_at, revoked_at, label, daily_cap_micro, expires_at FROM api_keys WHERE account_id=? ORDER BY id', a.id)
+      .map((k) => ({ prefix: k.prefix, createdAt: k.created_at, revokedAt: k.revoked_at, label: k.label, dailyCapUsd: k.daily_cap_micro == null ? null : k.daily_cap_micro / 1e6, expiresAt: k.expires_at })),
     sessions: q.all('SELECT expires_at FROM sessions WHERE account_id=?', a.id).map((s) => ({ expiresAt: s.expires_at })),
     usage: q.all('SELECT * FROM usage WHERE account_id=? ORDER BY id', a.id).map(usageRow),
     deposits: q.all('SELECT * FROM deposits WHERE account_id=? ORDER BY created_at', a.id).map((d) => ({
@@ -314,8 +322,10 @@ r.get('/v1/models', async () => ({
     pricing: { prompt_per_million: m.in, completion_per_million: m.out }, zdr: true, zdr_providers: m.zdrProviders })),
 }));
 r.post('/v1/chat/completions', async (req, res) => {
-  const account = accountFromBearer(req);
-  if (!account) return [401, { error: { message: 'Missing or invalid API key. Create one at /account.', code: 'invalid_api_key' } }];
+  const auth = resolveBearer(req);
+  if (auth.error === 'key_expired') return [401, { error: { message: errText('key_expired'), code: 'key_expired' } }];
+  if (!auth.account) return [401, { error: { message: 'Missing or invalid API key. Create one at /account.', code: 'invalid_api_key' } }];
+  const { account, key } = auth;
   const holder = await isHolder(account);
   const rpm = holder ? config.holderApiRpm : config.apiRpm;
   if (!rateLimit(`api:${account.id}`, rpm, 60_000)) return [429, { error: { message: `Rate limit: ${rpm} requests per minute.`, code: 'rate_limited' } }];
@@ -326,9 +336,9 @@ r.post('/v1/chat/completions', async (req, res) => {
   const freeLimit = holder ? config.holderFreePerDay : config.freeApiCalls;
   if (b.stream) {
     return runChatStream(req, res, { account, modelId: b.model, messages: b.messages, clientId, ip, freeLimit,
-      wantTokens: Number(b.max_tokens || b.max_completion_tokens) || undefined, openaiStream: true, extra: b });
+      wantTokens: Number(b.max_tokens || b.max_completion_tokens) || undefined, openaiStream: true, extra: b, key });
   }
-  return runChatJson(req, res, { account, body: b, clientId, ip, freeLimit });
+  return runChatJson(req, res, { account, body: b, clientId, ip, freeLimit, key });
 });
 
 // ---------- Admin (kunci ADMIN_KEY) ----------
@@ -357,6 +367,31 @@ r.post('/api/admin/harvest-now', async (req) => {
   const pendingWei = String(await escrowBalance(feeWallet(0).address));
   const result = await harvestOnce(undefined, { minWei: 1n });
   return { pendingWei, result };
+});
+
+// Laporan fee bulanan: JSON, CSV (satu baris per klaim) dan halaman /report (HTML server, tanpa JS wajib)
+r.get('/api/report', async () => {
+  const { reportMonths, currentMonth } = await import('./report.mjs');
+  const months = reportMonths();
+  return { months, latest: months[0] || currentMonth(), links: months.map((m) => ({ month: m, json: `/api/report/${m}`, csv: `/api/report/${m}.csv`, page: `/report?m=${m}` })) };
+});
+r.get('/api/report/:month', async (req, res, p) => {
+  const { monthReport, reportCsv } = await import('./report.mjs');
+  const csv = String(p.month).endsWith('.csv');
+  const month = String(p.month).replace(/\.csv$/, '');
+  const d = monthReport(month);
+  if (!d) return [404, { error: 'bad_month', hint: 'use YYYY-MM, e.g. /api/report/2026-11' }];
+  if (!csv) return d;
+  res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'public, max-age=60', 'Content-Disposition': `attachment; filename="ghostkey-fees-${month}.csv"` });
+  res.end(reportCsv(d));
+});
+r.get('/report', async (req, res, p, url) => {
+  const { renderReport, reportMonths, currentMonth } = await import('./report.mjs');
+  const months = reportMonths();
+  const want = url.searchParams.get('m');
+  const month = want && /^\d{4}-(0[1-9]|1[0-2])$/.test(want) ? want : (months[0] || currentMonth());
+  if (!months.includes(month)) months.unshift(month);
+  sendHtml(res, 200, renderReport(month, months.sort().reverse()));
 });
 
 // Halaman bukti: HTML dirender server (bisa dibaca tanpa JavaScript)

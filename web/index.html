@@ -70,28 +70,26 @@
       </div>
 
       <div class="hero-right">
-        <div class="stage" id="ghost-stage">
+        <div class="stage" id="ghost-stage" data-gslot="hero" data-look="-0.1">
           <img class="ghost-fallback" src="/img/ghost.svg" alt="The GHOSTKEY mascot: a small white ghost holding a gold key" width="440" height="360">
+          <span class="flow-cap" aria-hidden="true"><i class="t1"></i><i class="t2"></i><i class="t3"></i>wallet · IP · device drop off here</span>
           <span class="stage-hint" aria-hidden="true"><span data-px="spark"></span>tap to say hi</span>
         </div>
 
-        <!-- Kartu kontrak $GHOST: gembok piksel. Terkunci sebelum token ada; terbuka & slot terisi alamat saat live. -->
+        <!-- Kartu kunci $GHOST: gerigi atas digambar dari byte alamat (alamat lain = kunci lain). Sebelum token ada: slot kosong jujur. -->
         <aside class="keytag" id="keytag" aria-label="$GHOST contract address">
-          <div class="kt-lock" aria-hidden="true"><i class="kt-shackle"></i><i class="kt-body"><b></b></i></div>
-          <div class="kt-plate">
-            <div class="kt-top">
-              <span class="kt-name">$GHOST</span>
-              <span class="kt-chain">contract · Robinhood Chain · Pons</span>
-              <span class="kt-state" id="kt-chip">Locked</span>
-            </div>
-            <div class="kt-main" id="kt-main">
-              <div class="kt-slot" aria-label="Contract address not published yet"><span>0x</span><span class="kt-cells" id="kt-cells"></span></div>
-            </div>
-            <p class="kt-line" id="kt-line">Still locked. The real address lands in this slot the moment $GHOST exists. Until then, any $GHOST address going around isn't ours.</p>
-            <div class="kt-actions" id="kt-actions">
-              <button class="kt-buy" type="button" disabled>Not on Pons yet</button>
-              <a class="kt-more" href="#ghost">How Ghost Credit works</a>
-            </div>
+          <div class="kt-teeth" id="kt-teeth" aria-hidden="true"></div>
+          <div class="kt-head">
+            <span class="kt-ico" data-px="key" data-size="26" aria-hidden="true"></span>
+            <div class="kt-id"><span class="kt-name">$GHOST</span><span class="kt-chain">Token contract · Robinhood Chain</span></div>
+            <span class="kt-state" id="kt-chip"><i></i>Not live yet</span>
+          </div>
+          <div class="kt-main" id="kt-main">
+            <div class="kt-slot" aria-label="Contract address not published yet"><span>0x</span><span class="kt-cells" id="kt-cells"></span></div>
+          </div>
+          <p class="kt-line" id="kt-line">The real address lands here the moment $GHOST exists. Until then, any $GHOST address going around isn't ours.</p>
+          <div class="kt-actions" id="kt-actions">
+            <a class="kt-link" href="#ghost">How Ghost Credit works</a>
           </div>
         </aside>
       </div>
@@ -114,6 +112,7 @@
   <!-- ============ 2. HOW IT WORKS ============ -->
   <section class="sec" id="how">
     <div class="wrap">
+      <div class="gslot gs-head" data-gslot="how" data-look="-0.7"></div>
       <div class="sec-head rv">
         <span class="kicker">How it works</span>
         <h2 class="h2">Three steps. <span class="px nw">Nothing personal.</span></h2>
@@ -181,6 +180,29 @@
     </div>
   </section>
 
+
+  <!-- ============ 2b. LANGSUNG vs LEWAT GHOSTKEY ============ -->
+  <section class="sec" id="vs">
+    <div class="wrap vs-grid">
+      <div class="sec-head rv">
+        <span class="kicker">Why not go direct?</span>
+        <h2 class="h2">Same models. <span class="px nw">Less of you.</span></h2>
+        <p class="lead">What changes when your question goes through GHOSTKEY instead of straight to an AI app.</p>
+        <div class="gslot gs-col" data-gslot="vs" data-look="0.7"></div>
+      </div>
+      <div class="vs-table pbox rv" role="table" aria-label="Going straight to an AI app compared with GHOSTKEY">
+        <div class="vs-row vs-h" role="row"><span role="columnheader"><span class="sr">Topic</span></span><span role="columnheader">Straight to an AI app</span><span role="columnheader" class="us"><span data-px="key"></span>Through GHOSTKEY</span></div>
+        <div class="vs-row" role="row"><b role="rowheader">Sign-up</b><span role="cell">Email or phone number, often a card</span><span role="cell" class="us">A wallet signature. No email, no card.</span></div>
+        <div class="vs-row" role="row"><b role="rowheader">Who the provider sees</b><span role="cell">Your account</span><span role="cell" class="us">GHOSTKEY's shared key, with no user ID</span></div>
+        <div class="vs-row" role="row"><b role="rowheader">Your chats</b><span role="cell">Saved to your account history by default</span><span role="cell" class="us">Never written to our database</span></div>
+        <div class="vs-row" role="row"><b role="rowheader">Retention</b><span role="cell">Set by each app's own policy</span><span role="cell" class="us">Zero-retention providers only</span></div>
+        <div class="vs-row" role="row"><b role="rowheader">Models</b><span role="cell">One company's models</span><span role="cell" class="us"><span data-count-models>200+</span> models from many labs, one balance</span></div>
+        <div class="vs-row" role="row"><b role="rowheader">Price</b><span role="cell">A monthly plan, or credits per app</span><span role="cell" class="us">OpenRouter's price per message, top up from $5</span></div>
+        <div class="vs-row" role="row"><b role="rowheader">Checking the bill</b><span role="cell">Trust the invoice</span><span role="cell" class="us">A receipt per answer, checkable against OpenRouter</span></div>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ 3. WHAT WE KEEP ============ -->
   <section class="sec" id="keep">
     <div class="wrap keep-grid">
@@ -190,6 +212,7 @@
         <p class="lead">Your prompts and answers are never written to our database. Only what we need to charge you correctly.</p>
         <a class="btn ghost" href="/account#export"><span data-px="download"></span>Download everything we store about you</a>
         <p class="fine">Sign in first. The file shows every row we have about your account.</p>
+        <div class="gslot gs-col" data-gslot="keep" data-look="0.7"></div>
       </div>
       <div class="keep-cols">
         <div class="kcol pbox rv">
@@ -210,6 +233,46 @@
             <li><b>The answer</b><span>Not stored</span></li>
             <li><b>Your IP address</b><span>Not stored, not forwarded</span></li>
             <li><b>Your device</b><span>Browser and system info are dropped</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============ 3b. STRUK: cek tagihan ke catatan OpenRouter ============ -->
+  <section class="sec" id="receipts">
+    <div class="wrap">
+      <div class="gslot gs-head" data-gslot="receipts" data-look="-0.7"></div>
+      <div class="sec-head rv">
+        <span class="kicker">Receipts</span>
+        <h2 class="h2">Don't trust the bill. <span class="px nw">Check it.</span></h2>
+        <p class="lead">Every answer carries OpenRouter's generation ID, the exact cost and a SHA-256 of what we forwarded. One click puts OpenRouter's own record next to what we billed.</p>
+      </div>
+      <div class="rc-grid">
+        <div class="rc-paper rv" id="rc-paper" aria-live="polite">
+          <div class="rp-head"><span>GHOSTKEY</span><span id="rp-state">How a receipt reads</span></div>
+          <dl class="rp-lines">
+            <div><dt>Model</dt><dd id="rp-model">which model answered</dd></div>
+            <div><dt>Tokens</dt><dd id="rp-tokens">in / out, as OpenRouter counted them</dd></div>
+            <div><dt>Cost</dt><dd id="rp-cost">exact, to the millionth of a dollar</dd></div>
+            <div><dt>Generation ID</dt><dd id="rp-gen" class="mono">OpenRouter's own ID for the answer</dd></div>
+            <div><dt>SHA-256</dt><dd id="rp-sha" class="mono">hash of the exact request we forwarded</dd></div>
+          </dl>
+          <div class="rp-foot"><span>Stored</span><span>model · tokens · cost · time · ID</span></div>
+          <p class="rp-hint" id="rp-hint">Ask something in the box at the top. This receipt fills in with yours.</p>
+        </div>
+        <div class="rc-check pbox rv">
+          <div class="box-h"><h3 class="h3">Check a receipt</h3><a class="proof-link" href="/docs#auth">How it works</a></div>
+          <form class="rc-form" id="rc-form" autocomplete="off">
+            <label class="sr" for="rc-input">OpenRouter generation ID</label>
+            <input id="rc-input" class="mono" type="text" placeholder="gen-…" spellcheck="false">
+            <button class="btn small" type="submit">Check</button>
+          </form>
+          <div class="rc-out" id="rc-out"><p class="dim">Paste a generation ID from any GHOSTKEY answer. We fetch OpenRouter's record for it and put it next to what we billed. No sign-in.</p></div>
+          <ul class="rules">
+            <li>Signed in? Your <a class="inl" href="/account#usage">account page</a> exports every call as CSV, each row with its own check link.</li>
+            <li>The SHA-256 lets you prove which request was sent without us storing it.</li>
           </ul>
         </div>
       </div>
@@ -264,6 +327,7 @@
   <!-- ============ 5. $GHOST & GHOST CREDIT ============ -->
   <section class="sec" id="ghost">
     <div class="wrap">
+      <div class="gslot gs-head" data-gslot="ghost" data-look="-0.7"></div>
       <div class="sec-head rv">
         <span class="kicker">$GHOST &amp; Ghost Credit</span>
         <h2 class="h2">Hold $GHOST. <span class="px"><span class="nw">Get AI credit</span> <span class="nw">every hour.</span></span></h2>
@@ -284,6 +348,22 @@
       </div>
       <div class="fz-strip rv" id="fees-strip" hidden aria-live="polite"></div>
       <div class="dx-wrap" id="dx-chart" hidden style="margin-top:16px"></div>
+
+      <!-- Meja pembayaran: hitung mundur ke pembagian Ghost Credit berikutnya + data jam terakhir (dari /api/stats) -->
+      <div class="pay-desk pbox rv" id="pay-desk">
+        <div class="gslot gs-desk" data-gslot="paydesk" data-look="0.65" aria-hidden="true"><i class="coin"></i><i class="coin"></i><i class="coin"></i><i class="coin"></i></div>
+        <div class="pd-main">
+          <span class="kicker">Next Ghost Credit run</span>
+          <div class="pd-count"><b id="pd-clock">--:--</b><span id="pd-at">around :05 past the hour, UTC</span></div>
+          <p class="pd-note" id="pd-note">Every hour with fees, 25% goes out to holders as AI credit, and the hour's Merkle root is posted on-chain.</p>
+        </div>
+        <div class="pd-side">
+          <div><small id="pd-hour-l">Last hour paid</small><b id="pd-paid">—</b></div>
+          <div><small>Wallets credited</small><b id="pd-wallets">—</b></div>
+          <div><small>Paid so far</small><b id="pd-total">—</b></div>
+          <a class="proof-link" href="/token#ledger">Watch the ledger</a>
+        </div>
+      </div>
 
       <div class="ghost-grid">
         <div class="ledger pbox rv">
@@ -307,6 +387,24 @@
           </ul>
         </div>
       </div>
+    </div>
+  </section>
+
+
+  <!-- ============ 5b. SUDAH RILIS (dari changelog) ============ -->
+  <section class="sec" id="shipped">
+    <div class="wrap ship-grid">
+      <div class="sec-head rv">
+        <span class="kicker">Built in the open</span>
+        <h2 class="h2">Shipped, <span class="px nw">not promised.</span></h2>
+        <p class="lead">A roadmap box only gets ticked when there's a live feature behind it. This list reads our changelog, so it updates itself.</p>
+        <div class="ship-meter" id="ship-meter" hidden>
+          <div class="sm-top"><span><b id="sm-n">0</b> of <b id="sm-t">0</b> “Next” items shipped</span><a class="proof-link" href="/roadmap">Roadmap</a></div>
+          <div class="sm-bar" id="sm-bar"></div>
+        </div>
+        <div class="gslot gs-col" data-gslot="shipped" data-look="0.7"></div>
+      </div>
+      <ol class="ship-log pbox rv" id="ship-log"><li class="empty-note">Loading the changelog…</li></ol>
     </div>
   </section>
 
@@ -336,6 +434,13 @@
           <div class="del">- base_url = "https://openrouter.ai/api/v1"</div>
           <div class="add">+ base_url = "<span class="host-v1">https://ghostkeyai.com/v1</span>"</div>
         </div>
+        <ul class="dev-feats">
+          <li><span data-px="check"></span>Daily spend limit per key</li>
+          <li><span data-px="check"></span>Expiry dates on keys</li>
+          <li><span data-px="check"></span>A receipt on every call</li>
+          <li><span data-px="check"></span>Every call as CSV</li>
+          <li><span data-px="check"></span>600 requests a minute for holders</li>
+        </ul>
         <p class="fine">A new account gets an API key and 10 free calls on low-cost models. <a class="inl" href="/docs">Read the docs</a>.</p>
       </div>
       <div class="codebox pbox rv">
@@ -358,7 +463,7 @@
       <div class="sec-head rv">
         <span class="kicker">FAQ</span>
         <h2 class="h2">Short answers. <span class="px">Honest limits.</span></h2>
-        <img class="faq-ghost" src="/img/ghost.svg" alt="" width="220" height="180" loading="lazy">
+        <div class="gslot gs-col" data-gslot="faq" data-look="0.7"></div>
       </div>
       <div class="faq">
         <details class="rv"><summary>Is it really private?</summary><p>Privacy here covers who you are, not what you write. The model still reads your question to answer it. Your wallet, IP and device are removed first, and only zero-retention providers are used.</p></details>
@@ -368,6 +473,8 @@
         <details class="rv"><summary>Where is my balance kept?</summary><p>Your balance is prepaid AI credit held by the GHOSTKEY server. It is not a token in your wallet. You top up with USDG or ETH on Robinhood Chain, counted 1:1 in US dollars.</p></details>
         <details class="rv"><summary>Why do you keep my wallet address?</summary><p>Top-ups and Ghost Credit need it. We keep it so your balance and credit go to the right account. Nothing else about you is stored.</p></details>
         <details class="rv"><summary>What is Ghost Credit?</summary><p>Each hour, 25% of the $GHOST creator fee becomes AI credit for holders. It is platform credit for AI, not money. It depends on how much $GHOST is traded, so it can be zero in a quiet hour.</p></details>
+        <details class="rv"><summary>How do I check what I was charged?</summary><p>Every answer has a receipt with OpenRouter's generation ID and the exact cost. Press "Check against OpenRouter" under any answer, or paste the ID in the Receipts section above. Your account page exports every call as CSV.</p></details>
+        <details class="rv"><summary>Can I give an API key to a bot safely?</summary><p>Give the key a daily spending limit and an expiry date on your account page. At its limit the key stops until 00:00 UTC, and after its expiry date it stops for good. Your other keys keep working.</p></details>
         <details class="rv"><summary>Can I check your code?</summary><p>Yes. The inspector above shows the exact request we build. The proof page links the source code and every contract.</p></details>
       </div>
     </div>
@@ -376,7 +483,7 @@
   <!-- Penutup -->
   <section class="sec closer">
     <div class="wrap closer-in pbox rv">
-      <img src="/img/ghost.svg" alt="" width="132" height="108" loading="lazy">
+      <div class="gslot gs-close" data-gslot="closer" data-look="0.5"><img src="/img/ghost.svg" alt="" width="132" height="108" loading="lazy"></div>
       <div>
         <h2 class="h2">Ask anything. <span class="px">Stay nobody.</span></h2>
         <p class="lead">10 free messages. No wallet needed.</p>

@@ -5,6 +5,8 @@ import { modelInfo, streamChat, completeChat, fitMaxTokens, estimateMaxUsd } fro
 import { hold, settle, release, available, canUseFree, consumeFree, bumpFreeCost, freeLeft, recordUsage } from './billing.mjs';
 import { redactForDisplay, STRIPPED, pickAllowed } from './privacy.mjs';
 import { sseStart, sseData, sseEvent, sendJson } from './http.mjs';
+import { getDaily, bumpDaily } from './db.mjs';
+import { keySpendKey } from './auth.mjs';
 
 const MAX_CHARS = 400_000;
 const MIN_TOKENS = 64;
@@ -48,8 +50,34 @@ const hasImage = (msgs) => msgs.some((m) => Array.isArray(m.content) && m.conten
  * Tentukan pembayar: { account } berbayar, atau { free:true } jatah gratis.
  * freeLimit: batas jatah untuk clientId ini (web = FREE_MESSAGES, API = FREE_API_CALLS).
  */
-export function pickPayer({ account, model, clientId, ip, freeLimit = config.freeMessages, api = false }) {
-  if (account && available(account.id) > 0) return { account: true, source: api ? 'api' : 'chat' };
+// ---------- Batas belanja kunci API ----------
+// Belanja hari ini per kunci ada di daily_counters (satu angka per kunci per hari UTC);
+// tahanan permintaan yang masih berjalan dihitung di memori supaya permintaan paralel tidak menembus batas.
+const keyHeld = new Map();
+export function keyCapLeftMicro(key) {
+  if (!key || key.capMicro == null) return Infinity;
+  return Math.max(0, key.capMicro - getDaily(keySpendKey(key.id)).micro - (keyHeld.get(key.id) || 0));
+}
+const spendable = (account, key) => Math.min(available(account.id), keyCapLeftMicro(key));
+const keyHold = (key, micro) => { if (key?.capMicro != null) keyHeld.set(key.id, (keyHeld.get(key.id) || 0) + micro); };
+const keyRelease = (key, micro) => {
+  if (key?.capMicro == null) return;
+  const left = (keyHeld.get(key.id) || 0) - micro;
+  if (left > 0) keyHeld.set(key.id, left); else keyHeld.delete(key.id);
+};
+// Belanja dicatat untuk SEMUA kunci (juga yang tanpa batas) supaya halaman akun bisa menampilkan "hari ini"
+const keySettle = (key, heldMicro, costMicro) => {
+  if (!key) return;
+  keyRelease(key, heldMicro);
+  bumpDaily(keySpendKey(key.id), 1, Math.max(0, costMicro | 0));
+};
+
+export function pickPayer({ account, model, clientId, ip, freeLimit = config.freeMessages, api = false, key = null }) {
+  if (account && available(account.id) > 0) {
+    // Kunci yang sudah mencapai batas hariannya berhenti total (tidak diam-diam pindah ke jatah gratis)
+    if (keyCapLeftMicro(key) <= 0) return { error: 'key_cap' };
+    return { account: true, source: api ? 'api' : 'chat' };
+  }
   const f = canUseFree(clientId, ip, freeLimit);
   if (f.ok) {
     if (!model.freeEligible) return { error: 'model_needs_balance' };
@@ -64,12 +92,20 @@ const ERR_TEXT = {
   top_up: 'Your balance is too low for this request. Add balance or pick a cheaper model.',
   model_needs_balance: 'Free messages work on budget models only. Pick a model marked FREE, or add balance.',
   free_paused: 'Free messages are paused for today. Add balance to continue.',
+  key_cap: 'This API key has reached its daily spending limit. It resets at 00:00 UTC, or raise the limit on your account page.',
+  key_expired: 'This API key has expired. Extend it or create a new one on your account page.',
   bad_model: 'Unknown model, or the model has no zero-retention provider right now.',
   bad_messages: 'Messages are missing or too long.',
   vision: 'This model cannot read images.',
   upstream: 'The model provider returned an error. You were not charged.',
 };
 export const errText = (code) => ERR_TEXT[code] || code;
+// Kode galat gaya OpenAI untuk /v1
+const API_CODE = { top_up: 'insufficient_balance', key_cap: 'key_daily_limit_reached', key_expired: 'key_expired' };
+export const apiCode = (code) => API_CODE[code] || code;
+
+// Sisa batas harian kunci (hanya untuk kunci yang punya batas) → ikut di struk
+const keyExtra = (key) => key?.capMicro != null ? { keyDailyLimitLeftUsd: microToUsd(keyCapLeftMicro(key)) } : {};
 
 // Struk yang sama untuk web (event: receipt), /v1 stream (potongan terakhir) dan /v1 biasa (ghostkey_receipt)
 function makeReceipt({ model, r, costMicro, balanceMicro, payer, clientId, freeLimit, extra = {} }) {
@@ -100,10 +136,10 @@ function makeReceipt({ model, r, costMicro, balanceMicro, payer, clientId, freeL
  *   supaya SDK OpenAI tidak tersandung event asing.
  */
 export async function runChatStream(req, res, opts) {
-  const { account, clientId, ip, openaiStream = false, freeLimit = config.freeMessages } = opts;
+  const { account, clientId, ip, openaiStream = false, freeLimit = config.freeMessages, key = null } = opts;
   const extra = pickAllowed(opts.extra || {});
   const fail = (status, code, extraBody = {}) => openaiStream
-    ? sendJson(res, status, { error: { message: errText(code), code: code === 'top_up' ? 'insufficient_balance' : code } })
+    ? sendJson(res, status, { error: { message: errText(code), code: apiCode(code) } })
     : sendJson(res, status, { error: code, message: errText(code), ...extraBody });
   const model = await modelInfo(opts.modelId);
   if (!model) return fail(400, 'bad_model');
@@ -111,7 +147,7 @@ export async function runChatStream(req, res, opts) {
   if (!messages) return fail(400, 'bad_messages');
   if (hasImage(messages) && !model.vision) return fail(400, 'vision');
 
-  const payer = pickPayer({ account, model, clientId, ip, freeLimit, api: openaiStream });
+  const payer = pickPayer({ account, model, clientId, ip, freeLimit, api: openaiStream, key });
   if (payer.error) return fail(402, payer.error, { freeLeft: freeLeft(clientId, freeLimit) });
 
   // Hitung batas token & tahan dana
@@ -120,10 +156,11 @@ export async function runChatStream(req, res, opts) {
   if (payer.free) {
     maxTokens = Math.min(want, config.freeMaxTokens);
   } else {
-    maxTokens = fitMaxTokens(model, messages, microToUsd(available(account.id)), want);
-    if (maxTokens < MIN_TOKENS) return fail(402, 'top_up');
+    maxTokens = fitMaxTokens(model, messages, microToUsd(spendable(account, key)), want);
+    if (maxTokens < MIN_TOKENS) return fail(402, keyCapLeftMicro(key) < available(account.id) ? 'key_cap' : 'top_up');
     heldMicro = usdToMicro(estimateMaxUsd(model, messages, maxTokens)) + 1;
     if (!hold(account.id, heldMicro)) return fail(402, 'top_up');
+    keyHold(key, heldMicro);
   }
 
   const ac = new AbortController();
@@ -157,10 +194,10 @@ export async function runChatStream(req, res, opts) {
       if (emptyAnswer) bumpFreeCost(ip, costMicro, clientId);
       else consumeFree(clientId, ip, costMicro);
       recordUsage({ ...usage, cost_micro: costMicro });
-    } else balanceMicro = settle(account.id, heldMicro, costMicro, usage);
+    } else { balanceMicro = settle(account.id, heldMicro, costMicro, usage); keySettle(key, heldMicro, costMicro); }
 
     const receipt = makeReceipt({ model, r, costMicro, balanceMicro, payer, clientId, freeLimit,
-      extra: emptyAnswer ? { empty: true, freeRefunded: !!payer.free } : {} });
+      extra: { ...(emptyAnswer ? { empty: true, freeRefunded: !!payer.free } : {}), ...keyExtra(key) } });
     if (openaiStream) sseData(res, { id: 'ghostkey-receipt', object: 'chat.completion.chunk', model: model.id, choices: [], ghostkey_receipt: receipt });
     else sseEvent(res, 'receipt', receipt);
     sseData(res, '[DONE]');
@@ -174,10 +211,10 @@ export async function runChatStream(req, res, opts) {
       const estMicro = Math.ceil(tin * model.in + tout * model.out);   // tarif per 1M token × token = mikro-USD
       const usage = { ...usageBase, tokens_in: tin, tokens_out: tout };
       if (payer.free) { consumeFree(clientId, ip, estMicro); recordUsage({ ...usage, cost_micro: estMicro }); }
-      else settle(account.id, heldMicro, estMicro, usage);
+      else { settle(account.id, heldMicro, estMicro, usage); keySettle(key, heldMicro, estMicro); }
       return;
     }
-    if (!payer.free) release(account.id, heldMicro);
+    if (!payer.free) { release(account.id, heldMicro); keyRelease(key, heldMicro); }
     console.warn('[chat] hulu gagal', e.message, e.detail || '');
     if (!res.writableEnded) {
       if (openaiStream) sseData(res, { error: { message: errText('upstream'), code: e.status || 502 } });
@@ -188,23 +225,24 @@ export async function runChatStream(req, res, opts) {
 }
 
 // /v1/chat/completions tanpa stream — jawaban hulu diteruskan utuh + kolom `ghostkey_receipt`.
-export async function runChatJson(req, res, { account, body, clientId, ip, freeLimit = config.freeApiCalls }) {
-  const err = (status, code) => sendJson(res, status, { error: { message: errText(code), code: code === 'top_up' ? 'insufficient_balance' : code } });
+export async function runChatJson(req, res, { account, body, clientId, ip, freeLimit = config.freeApiCalls, key = null }) {
+  const err = (status, code) => sendJson(res, status, { error: { message: errText(code), code: apiCode(code) } });
   const model = await modelInfo(body.model);
   if (!model) return err(400, 'bad_model');
   const messages = cleanMessages(body.messages);
   if (!messages) return err(400, 'bad_messages');
   if (hasImage(messages) && !model.vision) return err(400, 'vision');
-  const payer = pickPayer({ account, model, clientId, ip, freeLimit, api: true });
+  const payer = pickPayer({ account, model, clientId, ip, freeLimit, api: true, key });
   if (payer.error) return err(402, payer.error);
   const want = Math.min(Math.max(MIN_TOKENS, Number(body.max_tokens || body.max_completion_tokens) || 4096), 32000);
   let maxTokens, heldMicro = 0;
   if (payer.free) maxTokens = Math.min(want, config.freeMaxTokens);
   else {
-    maxTokens = fitMaxTokens(model, messages, microToUsd(available(account.id)), want);
-    if (maxTokens < MIN_TOKENS) return err(402, 'top_up');
+    maxTokens = fitMaxTokens(model, messages, microToUsd(spendable(account, key)), want);
+    if (maxTokens < MIN_TOKENS) return err(402, keyCapLeftMicro(key) < available(account.id) ? 'key_cap' : 'top_up');
     heldMicro = usdToMicro(estimateMaxUsd(model, messages, maxTokens)) + 1;
     if (!hold(account.id, heldMicro)) return err(402, 'top_up');
+    keyHold(key, heldMicro);
   }
   try {
     const r = await completeChat({ model, messages, maxTokens, extra: pickAllowed(body) });
@@ -213,15 +251,16 @@ export async function runChatJson(req, res, { account, body, clientId, ip, freeL
       model: model.id, tokens_in: r.tokensIn, tokens_out: r.tokensOut, gen_id: r.genId || null };
     let balanceMicro = null;
     if (payer.free) { consumeFree(clientId, ip, costMicro); recordUsage({ ...usage, cost_micro: costMicro }); }
-    else balanceMicro = settle(account.id, heldMicro, costMicro, usage);
-    const receipt = makeReceipt({ model, r, costMicro, balanceMicro, payer, clientId, freeLimit });
+    else { balanceMicro = settle(account.id, heldMicro, costMicro, usage); keySettle(key, heldMicro, costMicro); }
+    const receipt = makeReceipt({ model, r, costMicro, balanceMicro, payer, clientId, freeLimit, extra: keyExtra(key) });
     const h = { 'X-Ghostkey-Generation-Id': String(receipt.generationId || ''), 'X-Ghostkey-Cost': String(receipt.costUsd), 'X-Ghostkey-Rate-In-Per-M': String(model.in),
       'X-Ghostkey-Rate-Out-Per-M': String(model.out) };
     if (payer.free) h['X-Ghostkey-Free-Left'] = String(receipt.freeLeft);
     else h['X-Ghostkey-Balance'] = String(receipt.balanceUsd);
+    if (receipt.keyDailyLimitLeftUsd != null) h['X-Ghostkey-Key-Limit-Left'] = String(receipt.keyDailyLimitLeftUsd);
     sendJson(res, 200, { ...r.json, ghostkey_receipt: receipt }, h);
   } catch (e) {
-    if (!payer.free) release(account.id, heldMicro);
+    if (!payer.free) { release(account.id, heldMicro); keyRelease(key, heldMicro); }
     sendJson(res, e.status && e.status < 500 ? e.status : 502, { error: { message: errText('upstream'), code: 'upstream_error' } });
   }
 }

@@ -25,7 +25,7 @@ code.inline { font: 13px var(--font-mono); background: #ffffff0d; border: 1px so
 .nav { position: sticky; top: 0; z-index: 60; height: var(--nav-h); background: #121413f5; border-bottom: 1px solid var(--line); }
 .nav > .wrap { height: 100%; display: flex; align-items: center; gap: 28px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; flex: none; text-decoration: none; color: var(--ink); }
-.brand .mark { color: var(--mint); width: 24px; height: 16px; }
+.brand .mark { width: 44px; height: 36px; image-rendering: pixelated; margin: -6px -4px -6px -6px; flex: none; }
 .brand b { font: 400 15px/1 var(--font-pixel); letter-spacing: .14em; }
 .nav-links { display: flex; gap: 4px; }
 .nav-links a { font: 400 12px/1 var(--font-pixel); letter-spacing: .05em; text-transform: uppercase; color: var(--dim); text-decoration: none; padding: 10px 10px; display: inline-flex; align-items: center; gap: 8px; }

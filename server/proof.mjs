@@ -53,6 +53,9 @@ export async function renderProof() {
     ['We do not store your prompts or answers.',
       'We keep the model name, token count, cost, time and OpenRouter\'s generation ID (so each cost can be checked against OpenRouter\'s own record). There is no column for text anywhere in the database (live list below).',
       [ext(d.checks.export, 'Download your data (/api/me/export)'), gh(c.schema, 'db.mjs schema')]],
+    ['Personas are saved in your browser, not in our database.',
+      'A persona (name, model, instructions) is kept in your browser under <code>localStorage.gk_personas</code>. When a chat uses it, the instructions travel to the model as the first message of each request, through our server like any prompt, and are not stored. The inspector and the "What we sent" drawer show that message. No table below has a column for it.',
+      [ext('/app', 'Make one in the chat'), ext('/privacy', 'Inspector'), gh(c.schema, 'db.mjs schema')]],
     [`${pct(d.split.holderShareBps)} of $GHOST fees become Ghost Credit, every hour.`,
       'Each hour we publish who got what as JSON, and post its Merkle root to the GhostLedger contract. Anyone can recompute it.',
       [L ? ext(L.url, 'GhostLedger on Blockscout') : '<span class="dim">GhostLedger: not deployed yet</span>',
@@ -66,7 +69,7 @@ export async function renderProof() {
       'Creator fees go to one fee wallet. Each hour it claims them and sends the two shares on-chain. The transactions are listed below.',
       [W.fee ? ext(W.fee.url, 'Fee wallet') : '<span class="dim">Fee wallet: launches soon</span>',
         W.treasury ? ext(W.treasury.url, 'Treasury (holder share)') : '',
-        W.owner ? ext(W.owner.url, 'Owner wallet (team share)') : '', gh(c.harvester, 'harvester.mjs')]],
+        W.owner ? ext(W.owner.url, 'Owner wallet (team share)') : '', ext('/report', 'Monthly fee report'), gh(c.monthReport, 'Script: month-report.mjs'), gh(c.harvester, 'harvester.mjs')]],
   ];
   const claimTable = `<div class="table-scroll"><table class="pf-table">
     <thead><tr><th scope="col">Claim</th><th scope="col">How to check it yourself</th></tr></thead>

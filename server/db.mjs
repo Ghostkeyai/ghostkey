@@ -99,6 +99,10 @@ db.exec(SCHEMA);
 if (!db.prepare("SELECT 1 FROM pragma_table_info('usage') WHERE name='gen_id'").get()) {
   db.exec('ALTER TABLE usage ADD COLUMN gen_id TEXT; CREATE INDEX IF NOT EXISTS usage_gen ON usage(gen_id);');
 }
+// migrasi: batas belanja kunci API — nama bebas, batas harian (mikro-USD, NULL = tanpa batas), kedaluwarsa (ms, NULL = tidak pernah)
+for (const [col, type] of [['label', 'TEXT'], ['daily_cap_micro', 'INTEGER'], ['expires_at', 'INTEGER']]) {
+  if (!db.prepare("SELECT 1 FROM pragma_table_info('api_keys') WHERE name=?").get(col)) db.exec(`ALTER TABLE api_keys ADD COLUMN ${col} ${type}`);
+}
 
 export const now = () => Date.now();
 export const today = () => new Date().toISOString().slice(0, 10);

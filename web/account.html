@@ -51,6 +51,25 @@
   .secret code { flex: 1; min-width: 0; font: 13px var(--font-mono); overflow-wrap: anywhere; color: var(--gold); }
   .keys-list { margin-top: 14px; }
   .keys-list .table td { font-size: 13.5px; }
+  .kc-list { display: grid; gap: 10px; margin-top: 14px; }
+  .kc { border: 1px solid var(--line); padding: 12px 14px; background: #0e100f; }
+  .kc.off { opacity: .6; }
+  .kc-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13.5px; }
+  .kc-name { font: 400 10.5px/1 var(--font-pixel); text-transform: uppercase; letter-spacing: .05em; color: var(--gold); border: 1px solid #ffd27a44; padding: 4px 6px; }
+  .kc-act { margin-left: auto; display: flex; gap: 14px; }
+  .kc-cap { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 10px; font: 400 13px/1.4 var(--font-ui); color: var(--ink); }
+  .kc-cap .dim { color: var(--faint); }
+  .kc-bar { height: 6px; background: var(--bg-3); margin-top: 7px; }
+  .kc-bar i { display: block; height: 100%; background: var(--mint); }
+  .kc-bar.full i { background: var(--bad); }
+  .kc-meta { margin-top: 8px; font: 400 12.5px/1.4 var(--font-ui); color: var(--faint); }
+  .kc-meta .bad-t { color: var(--bad); font-weight: 500; }
+  .kc-form { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line-2); }
+  #key-body > .kc-form { border-top: 1px solid var(--line); }
+  .kc-grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 12px; align-items: end; }
+  .kc-grid .select, .kc-grid .input { padding-left: 12px; }
+  .kc-grid .opt { color: var(--faint); text-transform: none; letter-spacing: 0; font: 400 11px var(--font-ui); }
+  @media (max-width: 1100px) { .kc-grid { grid-template-columns: 1fr; } }
 
   .usage-tot { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); margin-bottom: 16px; }
   .usage-tot div { padding: 14px 16px; font: 400 10.5px/1 var(--font-pixel); text-transform: uppercase; letter-spacing: .05em; color: var(--faint); }
@@ -202,7 +221,7 @@
           <span class="label">What is in the file</span>
           <ul class="ilist ok" style="margin-top:14px">
             <li><span data-pix="check"></span><span>Your account<small>wallet address, balance, when it was created</small></span></li>
-            <li><span data-pix="check"></span><span>Your API keys<small>the first characters only, plus when each was made</small></span></li>
+            <li><span data-pix="check"></span><span>Your API keys<small>the first characters only, when each was made, any name, limit or expiry you set, and today's spend per key</small></span></li>
             <li><span data-pix="check"></span><span>Your usage<small>model, tokens in and out, cost, time, web or API</small></span></li>
             <li><span data-pix="check"></span><span>Your top-ups<small>transaction hash, amount, time</small></span></li>
             <li><span data-pix="check"></span><span>Your Ghost Credit<small>hour, amount, Merkle proof</small></span></li>

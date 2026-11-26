@@ -314,6 +314,40 @@ function keyList() {
   return acct?.apiKeyPrefix ? [{ prefix: acct.apiKeyPrefix }] : [];
 }
 
+// ---------- Batas kunci: batas belanja harian + kedaluwarsa ----------
+let keyForm = null;                          // null | 'new' | prefix kunci yang sedang diubah
+const EXPIRY = [['', 'Never'], ['1', '1 day'], ['7', '7 days'], ['30', '30 days'], ['90', '90 days'], ['365', '1 year']];
+const money = (n) => `$${Number(n).toFixed(Number(n) > 0 && Number(n) < 0.1 ? 3 : 2)}`;
+function expiryText(k) {
+  if (!k.expiresAt) return 'Never expires';
+  const d = new Date(k.expiresAt).toISOString().slice(0, 10);
+  if (k.expired || k.expiresAt <= Date.now()) return `<b class="bad-t">Expired</b> ${d}`;
+  const days = Math.ceil((k.expiresAt - Date.now()) / 86400_000);
+  return `Expires in ${days === 1 ? '1 day' : `${days} days`} · ${d}`;
+}
+function capHtml(k) {
+  const spent = Number(k.spentTodayUsd || 0);
+  if (k.dailyCapUsd == null) return `<div class="kc-cap"><span>Today ${money(spent)}</span><span class="dim">no daily limit</span></div>`;
+  const pct = Math.min(100, (spent / k.dailyCapUsd) * 100);
+  return `<div class="kc-cap"><span>Today ${money(spent)} of ${money(k.dailyCapUsd)}</span><span class="dim">${pct >= 100 ? 'limit reached · resets 00:00 UTC' : `${money(Math.max(0, k.dailyCapUsd - spent))} left`}</span></div>
+    <div class="kc-bar${pct >= 100 ? ' full' : ''}"><i style="width:${pct.toFixed(1)}%"></i></div>`;
+}
+function formHtml(k) {
+  const isNew = !k;
+  return `<form class="kc-form" data-form="${isNew ? 'new' : esc(k.prefix)}">
+    <div class="kc-grid">
+      <div class="field"><label for="kf-label">Name</label>
+        <input class="input" id="kf-label" maxlength="40" placeholder="optional, e.g. my agent" value="${esc(k?.label || '')}"></div>
+      <div class="field"><label for="kf-cap">Daily limit (USD)</label>
+        <input class="input mono" id="kf-cap" inputmode="decimal" placeholder="none" value="${k?.dailyCapUsd ?? ''}"></div>
+      <div class="field"><label for="kf-exp">Expires</label>
+        <select class="select" id="kf-exp">${isNew ? '' : `<option value="keep" selected>${k.expiresAt ? `Keep ${new Date(k.expiresAt).toISOString().slice(5, 10)}` : 'Never'}</option>`}${EXPIRY.filter(([v]) => isNew || k.expiresAt || v !== '').map(([v, t]) => `<option value="${v}">${t === 'Never' ? 'Never' : `In ${t}`}</option>`).join('')}</select></div>
+    </div>
+    <p class="hint" style="margin-top:10px">The limit counts what this key spends from your balance each UTC day. A key that hits it stops until 00:00 UTC instead of draining your balance. An expired key stops for good unless you extend it.</p>
+    <div style="display:flex;gap:10px;margin-top:12px"><button class="btn small" type="submit">${isNew ? 'Create key' : 'Save limits'}</button><button class="btn small ghost" type="button" data-cancel>Cancel</button></div>
+  </form>`;
+}
+
 function renderKey() {
   const el = $('#key-body');
   if (!acct) {
@@ -330,17 +364,67 @@ function renderKey() {
       <div class="secret"><code>${esc(newKey)}</code><button class="btn small" data-copy type="button">Copy</button></div>`;
   }
   html += keys.length
-    ? `<div class="keys-list table-scroll"><table class="table"><thead><tr><th>Key</th><th class="r">Created</th><th class="r"></th></tr></thead><tbody>
-        ${keys.map((k) => `<tr><td class="mono">${esc(k.prefix)}…</td><td class="r num">${k.createdAt ? `${ago(k.createdAt)}<span class="sub">${when(k.createdAt)}</span>` : '—'}</td><td class="r"><button class="linkbtn" type="button" data-revoke="${esc(k.prefix)}">Revoke</button></td></tr>`).join('')}
-      </tbody></table></div>`
+    ? `<div class="kc-list">${keys.map((k) => `<div class="kc${k.expired ? ' off' : ''}">
+        <div class="kc-top"><span class="mono">${esc(k.prefix)}…</span>${k.label ? `<span class="kc-name">${esc(k.label)}</span>` : ''}
+          <span class="kc-act"><button class="linkbtn" type="button" data-limits="${esc(k.prefix)}">Limits</button><button class="linkbtn" type="button" data-revoke="${esc(k.prefix)}">Revoke</button></span></div>
+        ${capHtml(k)}
+        <div class="kc-meta">${expiryText(k)}${k.createdAt ? ` · made ${ago(k.createdAt)}` : ''}</div>
+        ${keyForm === k.prefix ? formHtml(k) : ''}
+      </div>`).join('')}</div>`
     : '<p class="body-p" style="margin-top:8px">No key yet. Create one to call the API.</p>';
-  html += `<p class="hint" style="margin-top:12px">Each key bills your balance at OpenRouter's price. With a $0 balance, a new account gets ${int(cfg.freeApiCalls ?? cfg.freeMessages ?? 10)} free calls on low-cost models.${acct.apiFreeLeft != null ? ` <b style="color:var(--ink);font-weight:500">Free calls left: ${int(acct.apiFreeLeft)}.</b>` : ''}</p>
-    <div style="margin-top:16px"><button class="btn small" data-make type="button">${keys.length ? 'Create another key' : 'Create API key'}</button></div>`;
+  html += `<p class="hint" style="margin-top:12px">Each key bills your balance at OpenRouter's price. Give a key a daily limit or an expiry before you hand it to an agent or a script. With a $0 balance, a new account gets ${int(cfg.freeApiCalls ?? cfg.freeMessages ?? 10)} free calls on low-cost models.${acct.apiFreeLeft != null ? ` <b style="color:var(--ink);font-weight:500">Free calls left: ${int(acct.apiFreeLeft)}.</b>` : ''}</p>`;
+  html += keyForm === 'new' ? formHtml(null)
+    : `<div style="margin-top:16px"><button class="btn small" data-make type="button">${keys.length ? 'Create another key' : 'Create API key'}</button></div>`;
   el.innerHTML = html;
   el.querySelector('[data-copy]')?.addEventListener('click', () => copy(newKey, 'API key copied'));
   const mk = el.querySelector('[data-make]');
-  mk.onclick = () => makeKey(mk);
+  if (mk) mk.onclick = () => { keyForm = 'new'; renderKey(); $('#kf-label')?.focus(); };
   for (const b of el.querySelectorAll('[data-revoke]')) b.onclick = () => revokeKey(b);
+  for (const b of el.querySelectorAll('[data-limits]')) b.onclick = () => { keyForm = keyForm === b.dataset.limits ? null : b.dataset.limits; renderKey(); };
+  const f = el.querySelector('.kc-form');
+  if (f) {
+    f.querySelector('[data-cancel]').onclick = () => { keyForm = null; renderKey(); };
+    f.onsubmit = (e) => { e.preventDefault(); saveKeyForm(f); };
+  }
+}
+
+// Baca formulir → badan permintaan. null = masukan salah (sudah diberi tahu lewat toast)
+function readKeyForm(f, isNew) {
+  const capRaw = $('#kf-cap', f).value.trim().replace(/^\$/, '');
+  const cap = capRaw === '' ? null : Number(capRaw);
+  if (cap != null && (!Number.isFinite(cap) || cap < 0.01)) { toast('Daily limit must be a dollar amount, at least $0.01'); return null; }
+  const body = { label: $('#kf-label', f).value.trim(), dailyCapUsd: cap };
+  const exp = $('#kf-exp', f).value;
+  if (exp !== 'keep') body.expiresInDays = exp === '' ? null : Number(exp);
+  if (isNew && exp === 'keep') body.expiresInDays = null;
+  return body;
+}
+
+async function saveKeyForm(f) {
+  const target = f.dataset.form;
+  const isNew = target === 'new';
+  const body = readKeyForm(f, isNew);
+  if (!body) return;
+  const btn = f.querySelector('[type=submit]');
+  btn.disabled = true;
+  try {
+    if (isNew) {
+      const r = await api('/api/me/apikey', { method: 'POST', body });
+      newKey = r.apiKey;
+      toast('New API key created');
+    } else {
+      await api('/api/me/apikey/limits', { method: 'POST', body: { prefix: target, ...body } });
+      toast('Limits saved');
+    }
+    keyForm = null;
+    const fresh = await me(true);
+    if (fresh) acct = fresh;
+    renderKey(); renderCurl();
+  } catch (e) {
+    btn.disabled = false;
+    const m = { bad_cap: 'Daily limit must be between $0.01 and $10,000.', bad_expiry: 'Pick an expiry within one year.', too_many_keys: 'You already have 5 keys. Revoke one first.' }[e.body?.error || e.message];
+    toast(e.status === 401 ? 'Session ended. Sign in again.' : m || `Could not save: ${e.message}`);
+  }
 }
 
 // Cabut kunci: konfirmasi dua langkah (tanpa dialog bawaan browser)
@@ -355,28 +439,12 @@ async function revokeKey(btn) {
     await api('/api/me/apikey/revoke', { method: 'POST', body: { prefix: btn.dataset.revoke } });
     acct.apiKeys = keyList().filter((k) => k.prefix !== btn.dataset.revoke);
     if (newKey && newKey.startsWith(btn.dataset.revoke)) newKey = null;
+    if (keyForm === btn.dataset.revoke) keyForm = null;
     renderKey(); renderCurl();
     toast('Key revoked');
   } catch (e) {
     btn.disabled = false;
     toast(e.status === 401 ? 'Session ended. Sign in again.' : `Could not revoke: ${e.message}`);
-  }
-}
-
-async function makeKey(btn) {
-  btn.disabled = true;
-  try {
-    const r = await api('/api/me/apikey', { method: 'POST' });
-    newKey = r.apiKey;
-    const fresh = await me(true);
-    if (fresh) acct = fresh;
-    const prefix = r.prefix || newKey.slice(0, 14);
-    if (!keyList().some((k) => k.prefix === prefix)) acct.apiKeys = [...keyList(), { prefix, createdAt: Date.now() }];
-    renderKey(); renderCurl();
-    toast('New API key created');
-  } catch (e) {
-    btn.disabled = false;
-    toast(e.status === 401 ? 'Session ended. Sign in again.' : `Could not create a key: ${e.message}`);
   }
 }
 

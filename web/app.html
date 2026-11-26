@@ -149,6 +149,42 @@
   .forced code { font: 12.5px var(--font-mono); color: var(--mint); overflow-wrap: anywhere; }
   .drawer-b .links { display: flex; flex-wrap: wrap; gap: 10px 20px; }
 
+  /* Persona */
+  .side .label .p-acts { display: flex; gap: 12px; }
+  .side .linkbtn { font: inherit; text-transform: inherit; letter-spacing: inherit; color: var(--mint); background: none; border: 0; padding: 0; cursor: pointer; }
+  .side .linkbtn:hover { text-decoration: underline; }
+  .personas { padding: 0 8px 4px; max-height: 32vh; overflow-y: auto; flex: none; }
+  .personas .none { padding: 4px 10px 10px; font-size: 13px; color: var(--faint); }
+  .prow { display: flex; align-items: stretch; border-left: 2px solid transparent; }
+  .prow.on { border-left-color: var(--gold); background: #ffd27a0d; }
+  .prow:hover { background: #ffffff06; }
+  .puse { flex: 1; min-width: 0; text-align: left; background: none; border: 0; padding: 8px 10px; cursor: pointer; color: var(--dim); }
+  .puse b { display: block; font-weight: 400; font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .puse span { font: 400 11.5px var(--font-mono); color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .pedit { background: none; border: 0; color: var(--faint); font: 400 10px/1 var(--font-pixel); letter-spacing: .05em; text-transform: uppercase; padding: 0 10px; cursor: pointer; }
+  .pedit:hover { color: var(--mint); }
+  .p-chip { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #ffd27a55; background: #ffd27a0d; padding: 6px 6px 6px 10px; min-width: 0; max-width: 220px; }
+  .p-chip[hidden] { display: none; }
+  .p-dot { width: 6px; height: 6px; background: var(--gold); flex: none; }
+  .p-chip-n { font: 400 10.5px/1 var(--font-pixel); letter-spacing: .05em; text-transform: uppercase; color: var(--gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .p-chip button { background: none; border: 0; color: var(--dim); font-size: 16px; line-height: 1; padding: 0 4px; cursor: pointer; }
+  .p-chip button:hover { color: var(--ink); }
+  .hello .p-preview { max-width: 620px; width: 100%; text-align: left; border: 1px solid var(--line); border-left: 3px solid var(--gold); background: #0f1110; padding: 12px 14px; font: 400 13px/1.6 var(--font-mono); color: var(--dim); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .pe-box { width: min(640px, 100%); }
+  .pe-h { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px; border-bottom: 1px solid var(--line); }
+  .pe-h h2 { font: 300 22px/1.2 var(--font-ui); }
+  .pe-b { padding: 6px 16px 16px; overflow-y: auto; display: grid; gap: 8px; }
+  .pe-b .label { margin-top: 10px; }
+  .pe-b .chips button { cursor: pointer; }
+  .pe-b textarea.input { resize: vertical; min-height: 150px; font: 400 14px/1.55 var(--font-ui); }
+  .pe-model { max-width: none; width: 100%; }
+  .pe-meta { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; color: var(--faint); }
+  .pe-meta .over { color: var(--bad); }
+  .pe-meta .num { white-space: nowrap; }
+  .pe-note { font-size: 12.5px; color: var(--dim); border-left: 2px solid var(--mint); padding-left: 10px; margin-top: 4px; }
+  .pe-f { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 16px; border-top: 1px solid var(--line); }
+  .pe-f #pe-del { margin-right: auto; }
+
   @media (max-width: 900px) {
     .shell { grid-template-columns: 1fr; }
     .side { position: fixed; top: var(--nav-h); left: 0; bottom: 0; width: min(300px, 86vw); z-index: 110; transform: translateX(-100%); transition: transform .2s; }
@@ -161,6 +197,8 @@
     .meter .cells { display: none; }
     .meter .signin-lbl { display: none; }
     .meter #m-signin { display: none; }
+    .p-chip { max-width: 120px; }
+    .pe-meta { flex-direction: column; gap: 4px; }
     .facts { grid-template-columns: 1fr; }
     .facts div + div { border-left: 0; border-top: 1px solid var(--line); }
     .composer { padding: 8px 10px 10px; }
@@ -183,10 +221,13 @@
 <div class="shell" id="shell">
   <aside class="side" id="side" aria-label="Your chats">
     <div class="side-top"><button class="btn small" id="new-chat" type="button">New chat</button></div>
-    <div class="label"><span>This browser</span><span id="conv-count" class="num"></span></div>
+    <div class="label"><span>Personas</span><span class="p-acts"><button class="linkbtn" id="p-import" type="button">Import</button><button class="linkbtn" id="p-new" type="button">+ New</button></span></div>
+    <input type="file" id="p-file" accept="application/json,.json" hidden>
+    <div class="personas" id="personas"></div>
+    <div class="label"><span>Chats · this browser</span><span id="conv-count" class="num"></span></div>
     <div class="convs" id="convs"></div>
     <div class="local-box">
-      <p><svg class="pix" viewBox="0 0 8 8" width="14" height="14" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M2 0h4v1H2zM1 1h1v2H1zM6 1h1v2H6zM0 3h8v4H0z"/><path fill="#101211" d="M3 4h2v2H3z"/></svg><span>Chats live only in this browser. Our server never stores your prompts or answers.</span></p>
+      <p><svg class="pix" viewBox="0 0 8 8" width="14" height="14" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M2 0h4v1H2zM1 1h1v2H1zM6 1h1v2H6zM0 3h8v4H0z"/><path fill="#101211" d="M3 4h2v2H3z"/></svg><span>Chats and personas are saved only in this browser. Prompts and persona instructions pass through our server to the model and are never stored.</span></p>
       <div class="row">
         <button class="btn small ghost" id="export" type="button">Export</button>
         <button class="btn small ghost" id="wipe" type="button">Wipe</button>
@@ -204,6 +245,7 @@
         <span class="pr" id="m-rate"></span>
         <span class="car">▼</span>
       </button>
+      <span class="p-chip" id="p-chip" hidden><span class="p-dot"></span><span class="p-chip-n" id="p-chip-n"></span><button type="button" id="p-chip-x" aria-label="Chat without this persona">×</button></span>
       <div class="meter" id="meter"></div>
     </div>
 
@@ -241,6 +283,29 @@
       <a href="/models">Full table + compare ↗</a>
     </div>
   </div>
+</div>
+
+<!-- Editor persona (hanya di browser ini) -->
+<div class="picker" id="pe" role="dialog" aria-modal="true" aria-labelledby="pe-title">
+  <form class="picker-box pe-box" id="pe-form" autocomplete="off">
+    <div class="pe-h"><h2 id="pe-title">New persona</h2><button class="btn small ghost" id="pe-close" type="button">Close</button></div>
+    <div class="pe-b">
+      <div id="pe-starters"><div class="label">Start from</div><div class="chips"></div></div>
+      <label class="label" for="pe-name">Name</label>
+      <input class="input" id="pe-name" maxlength="40" placeholder="e.g. Contract reader">
+      <div class="label">Model</div>
+      <button class="model-btn pe-model" id="pe-model" type="button"><span class="tag zdr">ZDR</span><span class="nm" id="pe-model-n">Pick a model</span><span class="pr" id="pe-model-r"></span><span class="car">▼</span></button>
+      <label class="label" for="pe-instr">Instructions</label>
+      <textarea class="input" id="pe-instr" rows="8" placeholder="How should the model answer? Tone, format, what to avoid."></textarea>
+      <div class="pe-meta"><span>Sent as the first message of every request in a chat with this persona. Visible in "What we sent".</span><span id="pe-count" class="num">0 / 6,000</span></div>
+      <p class="pe-note">Saved in this browser only, not in our database. When you chat with it, the instructions pass through our server to the model with each message, like your prompt, and are not kept. To use it somewhere else, download it and import the file there.</p>
+    </div>
+    <div class="pe-f">
+      <button class="btn small ghost" id="pe-del" type="button" hidden>Delete</button>
+      <button class="btn small ghost" id="pe-dl" type="button" hidden>Download</button>
+      <button class="btn small" id="pe-save" type="submit">Save persona</button>
+    </div>
+  </form>
 </div>
 
 <!-- Laci: apa yang dikirim ke OpenRouter -->

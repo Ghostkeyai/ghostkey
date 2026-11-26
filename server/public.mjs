@@ -103,6 +103,7 @@ export async function proofData() {
       credit: codeUrl('server/credit.mjs'),
       harvester: codeUrl('server/harvester.mjs'),
       recompute: codeUrl('tools/verify/recompute-hour.mjs'),
+      monthReport: codeUrl('tools/verify/month-report.mjs'),
       comparePrices: codeUrl('tools/verify/compare-prices.mjs'),
       feeRecipient: codeUrl('tools/verify/fee-recipient.mjs'),
       contract: codeUrl('contracts/src/GhostLedger.sol'),

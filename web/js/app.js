@@ -50,6 +50,44 @@ const store = {
   wipe() { try { localStorage.removeItem(KEY_CHATS); } catch {} },
 };
 
+// ---------- Persona (hanya di browser ini) ----------
+// Persona = nama + model + instruksi. Disimpan di localStorage, tidak pernah di server. Saat chat memakai persona,
+// instruksinya dikirim sebagai pesan "system" pertama di setiap permintaan (terlihat di laci "What we sent").
+const KEY_PERSONAS = 'gk_personas';
+const MAX_NAME = 40, MAX_INSTR = 6000, MAX_PERSONAS = 40;
+const STARTERS = [
+  { name: 'Plain editor', instructions: "You are a careful editor. Fix grammar, cut filler and keep the writer's own voice. Return the edited text first, then at most three short notes on what you changed and why." },
+  { name: 'Code reviewer', instructions: 'You review code like a senior engineer. List real bugs first, then risky patterns, then style. Quote the exact line for each point and show the fix. If the code is fine, say so in one line.' },
+  { name: 'Explain it simply', instructions: 'Explain things to a smart beginner. Short sentences, one everyday example, no jargon unless you define it in the same sentence. End with one line the reader could repeat to a friend.' },
+  { name: 'Translator', instructions: 'Translate whatever I send into natural English, or into the language I name at the start of my message. Keep the meaning and tone, not the word order. Return only the translation.' },
+];
+// Browser yang memblokir localStorage (mode privat ketat, uji otomatis): persona tetap jalan di memori tab ini saja
+let pMem = null;
+const personas = {
+  all() {
+    if (pMem) return pMem.slice();
+    try { const l = JSON.parse(localStorage.getItem(KEY_PERSONAS) || '[]'); return Array.isArray(l) ? l : []; } catch { return []; }
+  },
+  write(list) {
+    const l = list.slice(0, MAX_PERSONAS);
+    if (!pMem) { try { localStorage.setItem(KEY_PERSONAS, JSON.stringify(l)); return true; } catch {} }
+    pMem = l;
+    return 'tab';
+  },
+  get(id) { return this.all().find((x) => x.id === id) || null; },
+  save(pp) { const list = this.all(); const i = list.findIndex((x) => x.id === pp.id); if (i >= 0) list[i] = pp; else list.unshift(pp); return this.write(list); },
+  remove(id) { this.write(this.all().filter((x) => x.id !== id)); },
+};
+// rapikan persona dari berkas / masukan: hanya kolom yang dikenal, dipotong ke batas
+function cleanPersona(x) {
+  if (!x || typeof x !== 'object') return null;
+  const name = String(x.name || '').replace(/\s+/g, ' ').trim().slice(0, MAX_NAME);
+  const instructions = String(x.instructions || '').trim().slice(0, MAX_INSTR);
+  if (!name || !instructions) return null;
+  return { id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, model: String(x.model || '').slice(0, 120), instructions, at: Date.now() };
+}
+let persona = null;          // persona untuk chat baru (chat lama membawa salinannya sendiri)
+
 // ---------- Markdown ringan yang aman (escape dulu, baru format) ----------
 function md(text) {
   const blocks = String(text).split(/```/);
@@ -160,8 +198,10 @@ function renderLabChips() {
   const count = (c) => (c === 'All' ? MODELS.length : c === 'Free' ? MODELS.filter((m) => m.freeEligible).length : MODELS.filter((m) => m._lab === c).length);
   $('#m-labs').innerHTML = LAB_CHIPS.filter((c) => count(c) > 0).map((c) => `<button type="button" data-lab="${c}" aria-pressed="${filter === c}">${c === 'Free' ? 'Free OK' : c}<span class="n">${count(c)}</span></button>`).join('');
 }
-function openPicker(f) {
+let pickFor = null;          // null = model chat · fungsi = pilih model untuk editor persona
+function openPicker(f, forFn = null) {
   if (!MODELS.length) return;
+  pickFor = forFn;
   if (f) filter = f;
   renderLabChips();
   $('#picker').classList.add('open');
@@ -169,7 +209,7 @@ function openPicker(f) {
   renderPicker();
   setTimeout(() => $('#m-search').focus(), 30);
 }
-const closePicker = () => $('#picker').classList.remove('open');
+const closePicker = () => { $('#picker').classList.remove('open'); pickFor = null; };
 
 // ---------- Meteran: pesan gratis / saldo ----------
 function renderMeter() {
@@ -206,12 +246,19 @@ function renderConvs() {
   const list = store.all();
   $('#conv-count').textContent = list.length ? int(list.length) : '';
   $('#convs').innerHTML = list.length
-    ? list.map((c) => `<button class="conv${chat?.id === c.id ? ' on' : ''}" data-id="${esc(c.id)}" type="button"><b>${esc(c.title || 'Untitled')}</b><span>${esc(byId.get(c.model)?.name || c.model || '')} · ${ago(c.at)}</span></button>`).join('')
+    ? list.map((c) => `<button class="conv${chat?.id === c.id ? ' on' : ''}" data-id="${esc(c.id)}" type="button"><b>${esc(c.title || 'Untitled')}</b><span>${c.persona ? `${esc(c.persona.name)} · ` : ''}${esc(byId.get(c.model)?.name || c.model || '')} · ${ago(c.at)}</span></button>`).join('')
     : '<div class="none">No chats yet. They are saved here, in this browser only.</div>';
 }
 
 function helloHtml() {
   const total = cfg.freeMessages ?? 10;
+  if (persona) return `<div class="hello">
+    ${pix('ghost', 72, 'pix big')}
+    <h1><span class="px">${esc(persona.name)}</span></h1>
+    <p>Your persona, on ${esc(byId.get(persona.model)?.name || model?.name || 'the model above')}. Its instructions go out as the first message of every request. Open "What we sent" under any answer to see them.</p>
+    <div class="p-preview">${esc(persona.instructions.slice(0, 420))}${persona.instructions.length > 420 ? '…' : ''}</div>
+    <div class="sugs"><button type="button" data-pedit="${esc(persona.id)}">Edit persona</button><button type="button" data-pclear>Chat without a persona</button></div>
+  </div>`;
   return `<div class="hello">
     ${pix('ghost', 72, 'pix big')}
     <h1>200+ AI models. <span class="px">None of you.</span></h1>
@@ -228,6 +275,7 @@ function helloHtml() {
 function newChat() {
   if (busy) busy.abort();
   chat = null;
+  renderPersonaUi();
   $('#thread').innerHTML = helloHtml();
   renderConvs();
   closeSide();
@@ -252,6 +300,8 @@ function loadChat(c) {
   t.innerHTML = '';
   c.messages.forEach((m, i) => t.appendChild(msgEl(m, i)));
   if (c.model && byId.get(c.model)) setModel(byId.get(c.model));
+  persona = c.persona ? (personas.get(c.persona.id) || c.persona) : null;
+  renderPersonaUi();
   renderConvs();
   closeSide();
   scrollEnd();
@@ -286,7 +336,8 @@ async function send(text) {
   if (!text) return;
   if (!model) return toast('Models are still loading');
   if (!chat) {
-    chat = { id: 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: text.slice(0, 70), model: model.id, messages: [], at: Date.now() };
+    chat = { id: 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: text.slice(0, 70), model: model.id, messages: [], at: Date.now(),
+      persona: persona ? { id: persona.id, name: persona.name, instructions: persona.instructions } : null };
     $('#thread').innerHTML = '';
   }
   chat.model = model.id;
@@ -307,6 +358,8 @@ async function send(text) {
   $('#send').textContent = 'Stop';
   // Riwayat yang dikirim: hanya peran + teks (tanpa struk)
   const history = chat.messages.map((m) => ({ role: m.role, content: m.content })).slice(-30);
+  // persona: instruksinya selalu jadi pesan pertama (diambil dari salinan di chat ini, jadi chat lama tetap konsisten)
+  if (chat.persona?.instructions) history.unshift({ role: 'system', content: chat.persona.instructions });
   let stick = true;
   const wrap = $('#thread-wrap');
   const onScroll = () => { stick = wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight < 80; };
@@ -415,6 +468,7 @@ function openDrawer(r) {
       ${fwd ? `<pre class="json" style="margin-top:10px">${jsonHtml(fwd, {
         maxStr: 700,
         mark: (p) => (p === 'body.provider' ? { cls: 'hl', note: 'forced by GHOSTKEY' }
+          : p === 'body.messages[0]' && fwd.body?.messages?.[0]?.role === 'system' ? { cls: 'hl', note: 'your persona, from this browser' }
           : /^headers\.authorization$/i.test(p) ? { cls: 'hl', note: 'our shared key' } : null),
       })}</pre>` : '<div class="notice warn" style="margin-top:10px">This answer came without a copy of the request. Use the <a class="link" href="/privacy#inspector">inspector</a> to see what GHOSTKEY sends.</div>'}
     </div>
@@ -440,6 +494,102 @@ function closeDrawer() {
   $('#drawer-back').classList.remove('open');
 }
 
+// ---------- Persona: daftar, chip, editor ----------
+function renderPersonas() {
+  const list = personas.all();
+  const active = chat ? chat.persona?.id : persona?.id;
+  $('#personas').innerHTML = list.length
+    ? list.map((x) => `<div class="prow${x.id === active ? ' on' : ''}"><button class="puse" type="button" data-puse="${esc(x.id)}"><b>${esc(x.name)}</b><span>${esc(byId.get(x.model)?.name || (x.model ? x.model.split('/').pop() : 'any model'))}</span></button><button class="pedit" type="button" data-pedit="${esc(x.id)}" aria-label="Edit ${esc(x.name)}">Edit</button></div>`).join('')
+    : '<div class="none">Save a model with your own instructions. Kept in this browser only.</div>';
+}
+function renderPersonaUi() {
+  const cur = chat ? chat.persona : persona;
+  const chip = $('#p-chip');
+  if (cur) { chip.hidden = false; $('#p-chip-n').textContent = cur.name; } else chip.hidden = true;
+  renderPersonas();
+}
+function usePersona(id) {
+  const x = personas.get(id); if (!x) return;
+  if (busy) busy.abort();
+  persona = x;
+  if (x.model && byId.get(x.model)) setModel(byId.get(x.model));
+  chat = null;
+  $('#thread').innerHTML = helloHtml();
+  renderPersonaUi(); renderConvs(); closeSide();
+  $('#prompt').focus();
+}
+function clearPersona() {
+  persona = null;
+  if (chat?.persona) chat = null;
+  $('#thread').innerHTML = helloHtml();
+  renderPersonaUi(); renderConvs();
+  $('#prompt').focus();
+}
+
+let draft = null;            // persona yang sedang disunting
+function openEditor(id) {
+  const x = id ? personas.get(id) : null;
+  draft = x ? { ...x } : { id: null, name: '', model: model?.id || '', instructions: '' };
+  $('#pe-title').textContent = x ? 'Edit persona' : 'New persona';
+  $('#pe-name').value = draft.name;
+  $('#pe-instr').value = draft.instructions;
+  $('#pe-del').hidden = !x; $('#pe-dl').hidden = !x;
+  $('#pe-starters').hidden = !!x;
+  $('#pe-starters .chips').innerHTML = STARTERS.map((st, i) => `<button type="button" data-starter="${i}">${esc(st.name)}</button>`).join('');
+  peModel(); peCount();
+  $('#pe').classList.add('open');
+  setTimeout(() => $('#pe-name').focus(), 30);
+}
+const closeEditor = () => { $('#pe').classList.remove('open'); draft = null; };
+function peModel() { const m = byId.get(draft.model); $('#pe-model-n').textContent = m ? m.name : (draft.model || 'Pick a model'); $('#pe-model-r').textContent = m ? `${rate(m.in)} in · ${rate(m.out)} out /1M` : ''; }
+function peCount() { const n = $('#pe-instr').value.length; const c = $('#pe-count'); c.textContent = `${int(n)} / ${int(MAX_INSTR)}`; c.classList.toggle('over', n > MAX_INSTR); }
+function saveEditor() {
+  const name = $('#pe-name').value.replace(/\s+/g, ' ').trim();
+  const instructions = $('#pe-instr').value.trim();
+  if (!name) return toast('Give the persona a name');
+  if (!instructions) return toast('Write its instructions');
+  if (instructions.length > MAX_INSTR) return toast(`Instructions can be up to ${int(MAX_INSTR)} characters`);
+  // model belum dipilih / daftar model belum termuat → pakai model yang sedang aktif; jangan gagal simpan
+  if (!draft.model) draft.model = model?.id || [...byId.keys()][0] || '';
+  const isNew = !draft.id;
+  if (isNew && personas.all().length >= MAX_PERSONAS) return toast(`Up to ${MAX_PERSONAS} personas per browser`);
+  const x = { id: draft.id || 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: name.slice(0, MAX_NAME), model: draft.model, instructions, at: Date.now() };
+  const where = personas.save(x);
+  closeEditor();
+  toast(where === 'tab' ? 'This browser blocks storage, so the persona is kept for this tab only'
+    : isNew ? 'Persona saved in this browser' : 'Persona updated');
+  // persona aktif ikut diperbarui; chat lama tetap memakai salinan instruksinya sendiri
+  if (isNew || persona?.id === x.id) usePersona(x.id); else renderPersonas();
+}
+function deleteEditor() {
+  const b = $('#pe-del');
+  if (b.dataset.arm !== '1') { b.dataset.arm = '1'; b.textContent = 'Sure? Tap again'; setTimeout(() => { b.dataset.arm = ''; b.textContent = 'Delete'; }, 4000); return; }
+  b.dataset.arm = ''; b.textContent = 'Delete';
+  const id = draft.id; personas.remove(id); closeEditor();
+  if (persona?.id === id) clearPersona(); else renderPersonas();
+  toast('Persona deleted from this browser');
+}
+function downloadPersona() {
+  const x = personas.get(draft?.id); if (!x) return;
+  const slug = x.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'persona';
+  downloadJson({ ghostkeyPersona: 1, name: x.name, model: x.model, instructions: x.instructions }, `ghostkey-persona-${slug}.json`);
+}
+async function importPersonas(file) {
+  try {
+    if (file.size > 400_000) throw new Error('big');
+    const j = JSON.parse(await file.text());
+    const raw = Array.isArray(j) ? j : Array.isArray(j.personas) ? j.personas : [j];
+    const add = raw.map(cleanPersona).filter(Boolean);
+    if (!add.length) return toast('No persona found in that file');
+    const list = personas.all();
+    const room = MAX_PERSONAS - list.length;
+    if (room <= 0) return toast(`Up to ${MAX_PERSONAS} personas per browser`);
+    personas.write([...add.slice(0, room), ...list]);
+    renderPersonas();
+    toast(`${add.slice(0, room).length} persona${add.length === 1 ? '' : 's'} imported`);
+  } catch { toast('That file is not a GHOSTKEY persona'); }
+}
+
 // ---------- Sidebar di HP ----------
 const closeSide = () => $('#shell').classList.remove('side-open');
 
@@ -455,18 +605,7 @@ async function init() {
   renderMeter();
   refreshFree();
 
-  try {
-    MODELS = await api('/api/models');
-    if (!Array.isArray(MODELS)) MODELS = MODELS?.data || [];
-  } catch (e) {
-    MODELS = [];
-    $('#m-name').textContent = 'Models unavailable';
-    $('#thread').insertAdjacentHTML('afterbegin', `<div class="notice bad">Could not load the model list (${esc(e.message)}). The GHOSTKEY server may be offline. Try again in a minute.</div>`);
-  }
-  for (const m of MODELS) { m._lab = labOf(m); m._hay = `${m.name} ${m.id} ${m._lab}`.toLowerCase(); }
-  byId = new Map(MODELS.map((m) => [m.id, m]));
-  if (MODELS.length) { setModel(defaultModel()); $('#m-search').placeholder = `Search ${int(MODELS.length)} models: gpt, claude, llama…`; }
-  renderConvs();
+  const modelsReq = api('/api/models');   // dimulai sekarang, ditunggu sesudah semua tombol terpasang
 
   // Peristiwa
   $('#form').addEventListener('submit', (e) => { e.preventDefault(); send($('#prompt').value); });
@@ -484,7 +623,9 @@ async function init() {
   });
   $('#m-list').addEventListener('click', (e) => {
     const b = e.target.closest('.mrow'); if (!b) return;
-    setModel(byId.get(b.dataset.id)); closePicker(); $('#prompt').focus();
+    const m = byId.get(b.dataset.id);
+    if (pickFor) { const fn = pickFor; pickFor = null; closePicker(); fn(m); return; }
+    setModel(m); closePicker(); $('#prompt').focus();
   });
   $('#convs').addEventListener('click', (e) => {
     const b = e.target.closest('.conv'); if (!b) return;
@@ -494,6 +635,8 @@ async function init() {
   $('#thread').addEventListener('click', (e) => {
     const s = e.target.closest('[data-sug]');
     if (s) { send(s.dataset.sug); return; }
+    const pe = e.target.closest('[data-pedit]'); if (pe) { openEditor(pe.dataset.pedit); return; }
+    if (e.target.closest('[data-pclear]')) { clearPersona(); return; }
     const ck = e.target.closest('[data-check]');
     if (ck) { checkReceipt(ck.dataset.check); return; }
     const w = e.target.closest('[data-sent]');
@@ -505,17 +648,40 @@ async function init() {
       else if (a.dataset.act === 'pick') openPicker();
     }
   });
+  // persona
+  renderPersonaUi();
+  $('#p-new').onclick = () => openEditor(null);
+  $('#p-chip-x').onclick = clearPersona;
+  $('#personas').addEventListener('click', (e) => {
+    const u = e.target.closest('[data-puse]'); if (u) { usePersona(u.dataset.puse); return; }
+    const ed = e.target.closest('[data-pedit]'); if (ed) openEditor(ed.dataset.pedit);
+  });
+  $('#pe-close').onclick = closeEditor;
+  $('#pe').addEventListener('click', (e) => { if (e.target.id === 'pe') closeEditor(); });
+  $('#pe-model').onclick = () => openPicker(null, (m) => { if (draft) { draft.model = m.id; peModel(); } });
+  $('#pe-instr').addEventListener('input', peCount);
+  $('#pe-starters').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-starter]'); if (!b) return;
+    const st = STARTERS[Number(b.dataset.starter)];
+    if (!$('#pe-name').value.trim()) $('#pe-name').value = st.name;
+    $('#pe-instr').value = st.instructions; peCount();
+  });
+  $('#pe-del').onclick = deleteEditor;
+  $('#pe-dl').onclick = downloadPersona;
+  $('#p-import').onclick = () => $('#p-file').click();
+  $('#p-file').addEventListener('change', (e) => { const f = e.target.files?.[0]; if (f) importPersonas(f); e.target.value = ''; });
+  $('#pe-form').addEventListener('submit', (e) => { e.preventDefault(); saveEditor(); });
   $('#drawer-x').onclick = closeDrawer;
   $('#drawer-back').onclick = closeDrawer;
   $('#side-toggle').onclick = () => $('#shell').classList.toggle('side-open');
   $('#shell').addEventListener('click', (e) => { if ($('#shell').classList.contains('side-open') && !e.target.closest('#side') && !e.target.closest('#side-toggle')) closeSide(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closePicker(); closeDrawer(); closeSide(); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if ($('#picker').classList.contains('open')) closePicker(); else if ($('#pe').classList.contains('open')) closeEditor(); else { closeDrawer(); closeSide(); } } });
 
   // Ekspor & hapus percakapan lokal
   $('#export').onclick = () => {
-    const list = store.all();
-    if (!list.length) return toast('No chats to export yet');
-    downloadJson({ exportedAt: new Date().toISOString(), note: 'GHOSTKEY chats from this browser. Our server never stored them.', chats: list }, `ghostkey-chats-${new Date().toISOString().slice(0, 10)}.json`);
+    const list = store.all(), ps = personas.all();
+    if (!list.length && !ps.length) return toast('No chats or personas to export yet');
+    downloadJson({ exportedAt: new Date().toISOString(), note: 'GHOSTKEY chats and personas from this browser. Our server never stored them.', chats: list, personas: ps }, `ghostkey-chats-${new Date().toISOString().slice(0, 10)}.json`);
   };
   const wipe = $('#wipe');
   wipe.onclick = () => {
@@ -529,9 +695,27 @@ async function init() {
     store.wipe(); newChat(); toast('All chats deleted from this browser');
   };
 
+  await loadModels(modelsReq);
   // ?q=... dari landing → langsung kirim
   const q = new URLSearchParams(location.search).get('q');
   if (q && MODELS.length) { history.replaceState(null, '', location.pathname); send(q); }
+}
+
+async function loadModels(req) {
+  try {
+    MODELS = await req;
+    if (!Array.isArray(MODELS)) MODELS = MODELS?.data || [];
+  } catch (e) {
+    MODELS = [];
+    $('#m-name').textContent = 'Models unavailable';
+    $('#thread').insertAdjacentHTML('afterbegin', `<div class="notice bad">Could not load the model list (${esc(e.message)}). The GHOSTKEY server may be offline. Try again in a minute.</div>`);
+  }
+  for (const m of MODELS) { m._lab = labOf(m); m._hay = `${m.name} ${m.id} ${m._lab}`.toLowerCase(); }
+  byId = new Map(MODELS.map((m) => [m.id, m]));
+  if (MODELS.length) { setModel(defaultModel()); $('#m-search').placeholder = `Search ${int(MODELS.length)} models: gpt, claude, llama…`; }
+  renderConvs();
+  if (draft) peModel();                     // editor persona sudah terbuka sebelum model termuat
+  if (persona?.model && byId.get(persona.model) && !chat) setModel(byId.get(persona.model));
 }
 
 chrome();

@@ -117,12 +117,43 @@ function sky() {
 }
 
 // ---------- maskot 3D ----------
+// Satu hantu untuk seluruh halaman: mulai di hero, lalu ikut gulir dari tempat ke tempat ([data-gslot]).
+// Kalau pendamping gagal (mis. WebGL mati), hero tetap memakai gambar diam.
 function mountHero() {
   const stage = $('#ghost-stage'); if (!stage) return;
-  const pixel = innerWidth < 600 ? 3 : 4;
-  import('./hero-ghost.js')
-    .then((m) => m.mountGhost(stage, { pixel }))
+  import('./companion.js')
+    .then((m) => m.mountCompanion())
     .catch((e) => console.warn('[ghost] 3D off, static image shown:', e?.message || e));
+  // filter hidup di belakang hantu: nama model tujuan diambil dari daftar model asli
+  modelsP.then((list) => {
+    const ids = (list || []).filter((m) => POPULAR.some((re) => re.test(m.id))).map((m) => m.id);
+    return import('./hero-flow.js').then((f) => f.mountFlow(stage, ids.length ? ids : (list || []).slice(0, 12).map((m) => m.id)));
+  }).catch(() => {});
+}
+
+// judul hero masuk per kata / per huruf (tanpa clip-path; tetap terbaca bila JS lambat)
+function heroTitle() {
+  const h = $('.hero-h1'); if (!h || REDUCE) return;
+  let i = 0;
+  const wrap = (node, perChar) => {
+    for (const n of [...node.childNodes]) {
+      if (n.nodeType === 3) {
+        const frag = document.createDocumentFragment();
+        for (const part of n.textContent.split(/(\s+)/)) {
+          if (!part) continue;
+          if (/^\s+$/.test(part)) { frag.append(part); continue; }
+          const w = document.createElement('span'); w.className = 'hw';
+          if (perChar) for (const ch of part) { const c = document.createElement('span'); c.className = 'hc'; c.textContent = ch; c.style.setProperty('--i', i++); w.append(c); }
+          else { w.textContent = part; w.style.setProperty('--i', i); i += 2; }
+          frag.append(w);
+        }
+        n.replaceWith(frag);
+      } else if (n.nodeType === 1 && n.tagName !== 'BR') wrap(n, n.classList.contains('px'));
+    }
+  };
+  wrap(h, false);
+  h.classList.add('anim');
+  requestAnimationFrame(() => requestAnimationFrame(() => h.classList.add('go')));
 }
 
 // ---------- data bersama ----------
@@ -221,10 +252,23 @@ function setupTry() {
     const d = document.createElement('div'); d.className = 'rcpt';
     const sent = r.forwarded || null;
     d.innerHTML = `<span>cost ${esc(usd(r.costUsd))}</span><span>${int(r.tokensIn)} in / ${int(r.tokensOut)} out</span><span class="ok">identity removed ✓</span>`
-      + (sent ? '<button type="button">view what we sent</button>' : '<a class="inl" href="#inspector">view what we send</a>')
+      + (sent ? '<button type="button" data-sent>view what we sent</button>' : '<a class="inl" href="#inspector">view what we send</a>')
+      + (r.generationId ? '<button type="button" class="rc-btn" data-rc>check against OpenRouter</button>' : '')
       + '<span class="rcpt-more">Stored: model, tokens, cost, time, generation ID. <a href="/app">Continue in the full app →</a></span>';
+    fillPaper(r);
+    const rb = d.querySelector('[data-rc]');
+    if (rb) rb.onclick = async () => {
+      let out = d.querySelector('.rc-mini');
+      if (!out) { out = document.createElement('span'); out.className = 'rc-mini'; rb.after(out); }
+      out.className = 'rc-mini'; out.textContent = 'Checking…';
+      const j = await fetchReceipt(r.generationId);
+      if (j.pending) { out.textContent = 'OpenRouter is still publishing this record. Try again in a minute.'; return; }
+      if (!j.ok) { out.textContent = j.message; return; }
+      out.className = 'rc-mini' + (j.data.match ? ' ok' : '');
+      out.textContent = `OpenRouter recorded ${usd(j.data.openrouter.costUsd, { max: 6 })} · we billed ${usd(j.data.ghostkey.billedUsd, { max: 6 })} · ${j.data.match ? 'match ✓' : 'mismatch'}`;
+    };
     if (sent) {
-      const b = d.querySelector('button');
+      const b = d.querySelector('[data-sent]');
       b.onclick = () => {
         let pre = d.querySelector('pre');
         if (pre) { pre.remove(); b.textContent = 'view what we sent'; return; }
@@ -240,29 +284,161 @@ function setupTry() {
   $$('#try-sugg button').forEach((b) => (b.onclick = () => ask(b.dataset.q)));
 }
 
+// ============ STRUK: kertas contoh terisi struk asli + alat cek ID generasi ============
+// Ambil catatan OpenRouter untuk satu ID → { ok, data } | { pending } | { ok:false, message }
+async function fetchReceipt(id) {
+  try {
+    const r = await fetch(`/api/receipt/${encodeURIComponent(id)}`);
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 202) return { pending: true };
+    if (!r.ok) return { ok: false, message: j.message || (j.error === 'bad_id' ? 'That does not look like a generation ID (gen-…).' : j.error === 'slow_down' ? 'Too many checks. Wait a minute.' : 'Could not check right now.') };
+    return { ok: true, data: j };
+  } catch { return { ok: false, message: 'Could not reach the server.' }; }
+}
+// isi kertas struk di bagian Receipts dengan struk jawaban sungguhan dari kotak coba
+function fillPaper(r) {
+  const paper = $('#rc-paper'); if (!paper || !r) return;
+  const set = (id, v) => { const el = $(id); if (!el || v == null) return; el.textContent = v; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); };
+  set('#rp-model', r.model);
+  set('#rp-tokens', `${int(r.tokensIn)} in / ${int(r.tokensOut)} out`);
+  set('#rp-cost', usd(r.costUsd, { max: 6 }));
+  set('#rp-gen', r.generationId || 'not returned (demo mode)');
+  set('#rp-sha', r.forwardedSha256 ? r.forwardedSha256.slice(0, 32) + '…' : '—');
+  paper.classList.add('filled');
+  $('#rp-state').textContent = 'Your last answer';
+  $('#rp-hint').textContent = r.generationId ? 'This is the receipt for your answer above. Check it on the right.' : 'This answer came back without a generation ID.';
+  if (r.generationId) { const inp = $('#rc-input'); if (inp && !inp.value) inp.value = r.generationId; }
+}
+function setupReceipts() {
+  const form = $('#rc-form'); if (!form) return;
+  const inp = $('#rc-input'), out = $('#rc-out');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = inp.value.trim();
+    if (!/^gen-[A-Za-z0-9-]{6,100}$/.test(id)) { out.innerHTML = '<p class="dim">A generation ID starts with <code class="inline">gen-</code>. You find it under every answer in the chat, or ask something in the box at the top.</p>'; return; }
+    out.innerHTML = '<p class="loading-line">Asking OpenRouter for its record</p>';
+    const j = await fetchReceipt(id);
+    if (j.pending) { out.innerHTML = '<p class="dim">OpenRouter has not published this record yet. It usually takes under a minute. Try again shortly.</p>'; return; }
+    if (!j.ok) { out.innerHTML = `<p class="dim">${esc(j.message)}</p>`; return; }
+    const d = j.data, or = d.openrouter || {}, gk = d.ghostkey || {};
+    out.innerHTML = `<div class="rc-res">
+      <div><small>OpenRouter recorded</small><b>${usd(or.costUsd, { max: 6 })}</b><span>${esc(or.model || '')}${or.provider ? ` · via ${esc(or.provider)}` : ''}</span></div>
+      <div><small>GHOSTKEY billed</small><b>${usd(gk.billedUsd, { max: 6 })}</b><span>${int(gk.tokensIn)} in / ${int(gk.tokensOut)} out · ${esc(gk.via || '')}</span></div>
+      <div class="rc-verdict ${d.match ? 'ok' : 'bad'}"><span>${d.match ? 'Match, to the millionth of a dollar ✓' : 'The two numbers differ'}</span><a class="proof-link" href="/api/receipt/${encodeURIComponent(id)}" target="_blank" rel="noopener">Raw JSON</a></div>
+    </div>`;
+  });
+}
+
+// ============ MEJA PEMBAYARAN: hitung mundur ke :05 UTC + jam terakhir yang dibayar ============
+function setupPayDesk() {
+  const desk = $('#pay-desk'); if (!desk) return;
+  const clock = $('#pd-clock'), at = $('#pd-at');
+  const pad = (n) => String(n).padStart(2, '0');
+  let ranFor = -1;
+  const tick = () => {
+    const now = new Date();
+    const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), 5, 0));
+    const sinceRun = now - next;                                   // >0: sudah lewat :05 jam ini
+    if (sinceRun >= 0 && sinceRun < 180_000) {                     // 3 menit pertama: sedang berjalan
+      clock.textContent = 'now'; at.textContent = 'crediting holders for the last hour';
+      if (ranFor !== now.getUTCHours()) { ranFor = now.getUTCHours(); dispatchEvent(new Event('gk-wave')); }
+      return;
+    }
+    if (sinceRun >= 0) next.setUTCHours(next.getUTCHours() + 1);
+    const s = Math.max(0, Math.round((next - now) / 1000));
+    clock.textContent = `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
+    at.textContent = `until ${pad(next.getUTCHours())}:05 UTC`;
+  };
+  tick(); setInterval(tick, 1000);
+  const load = () => api('/api/stats').then((s) => {
+    const h = s.lastHour;
+    if (h) {
+      $('#pd-paid').textContent = usd(h.distributedUsd, { min: 2, max: 2 });
+      $('#pd-wallets').textContent = int(h.entries);
+      const st = new Date(h.startsAt);
+      $('#pd-hour-l').textContent = `Paid for ${pad(st.getUTCHours())}:00 UTC`;
+    }
+    $('#pd-total').textContent = usd(s.holderCreditPaidUsd, { min: 2, max: 2 });
+  }).catch(() => {});
+  load(); setInterval(load, 60_000);
+}
+
+// ============ SUDAH RILIS: changelog + progres "Next" dari halaman roadmap ============
+async function setupShipped() {
+  const log = $('#ship-log'); if (!log) return;
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const day = (iso) => { const [y, m, d] = String(iso).split('-').map(Number); return d && m ? `${d} ${MON[m - 1]}` : ''; };
+  try {
+    const list = await api('/api/changelog');
+    if (!Array.isArray(list) || !list.length) throw new Error('empty');
+    const newest = list[0]?.date;
+    log.innerHTML = list.slice(0, 5).map((c) => `<li class="rv"><time datetime="${esc(c.date)}">${day(c.date)}</time><div>
+      <h4>${esc(c.title)}${c.date === newest ? '<span class="new">New</span>' : ''}</h4><p>${esc(c.what)}</p>
+      ${c.link ? `<a class="proof-link" href="${esc(c.link.replace(/^https:\/\/ghostkeyai\.com/, '') || '/')}">${esc(c.cta || 'Open')}</a>` : ''}</div></li>`).join('')
+      + (list.length > 5 ? `<li><span></span><a class="proof-link" href="/roadmap#log">${list.length - 5} more in the full log</a></li>` : '');
+    watch(log);
+  } catch { log.innerHTML = '<li class="empty-note">The changelog could not be loaded. <a class="inl" href="/roadmap">Open the roadmap</a>.</li>'; }
+  // progres: hitung kotak "Next" yang sudah dicentang di halaman roadmap itu sendiri (satu sumber kebenaran)
+  try {
+    const html = await (await fetch('/roadmap')).text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const items = [...doc.querySelectorAll('#next .item')];
+    if (!items.length) return;
+    const done = items.filter((i) => i.classList.contains('done')).length;
+    $('#sm-n').textContent = done; $('#sm-t').textContent = items.length;
+    $('#sm-bar').innerHTML = items.map((_, i) => `<i class="${i < done ? 'on' : ''}"></i>`).join('');
+    $('#ship-meter').hidden = false;
+  } catch {}
+}
+
 // ============ jumlah model live (dekat judul) ============
 function setupModelCount() {
   modelsP.then((list) => {
-    if (list.length) $('#model-count').textContent = int(list.length);
+    if (list.length) { $('#model-count').textContent = int(list.length); $$('[data-count-models]').forEach((el) => (el.textContent = int(list.length))); }
     else $('#model-count-l').textContent = 'models · list';
   });
 }
 
-// ============ gembok $GHOST: terkunci sebelum token ada, terbuka saat live ============
+// ============ kartu kunci $GHOST: gerigi dari byte alamat, alamat per 8 karakter, salin sekali ketuk ============
+// gerigi kunci: 20 byte alamat → 20 gigi (tinggi = nilai byte). Tanpa alamat: gerigi rata (kunci kosong).
+function keyTeeth(addr) {
+  const hex = isAddr(addr) ? addr.slice(2) : '';
+  const n = 20, w = 400 / n;
+  let d = 'M0 0H400V4';
+  for (let i = n - 1; i >= 0; i--) {
+    const v = hex ? parseInt(hex.slice(i * 2, i * 2 + 2), 16) / 255 : 0;
+    const h = 4 + Math.round(v * 12);
+    const x1 = (i + 1) * w, x0 = i * w;
+    d += `H${(x1 - 2).toFixed(1)}V${h}H${(x0 + 2).toFixed(1)}V4`;
+  }
+  d += 'H0Z';
+  return `<svg viewBox="0 0 400 18" preserveAspectRatio="none"><defs><linearGradient id="ktg" x1="0" x2="1"><stop offset="0" stop-color="#ffd27a" stop-opacity=".9"/><stop offset=".55" stop-color="#e9b75c" stop-opacity=".75"/><stop offset="1" stop-color="#ffd27a" stop-opacity=".9"/></linearGradient></defs><path d="${d}" fill="url(#ktg)"/></svg>`;
+}
 async function setupKeytag() {
   $('#kt-cells').innerHTML = '<i></i>'.repeat(40);
+  $('#kt-teeth').innerHTML = keyTeeth(null);
   const cfg = await cfgP;
   const ca = isAddr(cfg.ghostToken) ? cfg.ghostToken : null;
   if (!ca) return;   // sebelum launch: status jujur dari HTML tetap tampil
-  const lc = ca.toLowerCase();
+  const lc = ca.toLowerCase(), h = ca.slice(2);
+  const head = h.slice(0, 4), tail = h.slice(-4);
   $('#keytag').classList.add('open');
-  $('#kt-chip').textContent = 'Unlocked · live';
-  $('#kt-main').innerHTML = `<div class="kt-slot live"><span class="addr">${esc(ca)}</span><button class="kt-copy" type="button">Copy</button></div>`;
-  $('#kt-main .kt-copy').onclick = () => copy(ca, 'Contract address copied');
-  $('#kt-line').textContent = 'Unlocked. Before you buy, check that this address reads the same as our pinned post on X.';
-  $('#kt-actions').innerHTML = `<a class="kt-buy" href="https://www.ponsfamily.com/launchpad/${lc}" target="_blank" rel="noopener">Buy on Pons</a>`
-    + `<a class="kt-link" href="https://dexscreener.com/robinhood/${lc}" target="_blank" rel="noopener">Chart</a>`
-    + `<a class="kt-link" href="${EXPLORER}/token/${ca}" target="_blank" rel="noopener">Blockscout</a>`;
+  $('#kt-teeth').innerHTML = keyTeeth(ca);
+  $('#kt-chip').innerHTML = '<i></i>Live on Pons';
+  const groups = [0, 1, 2, 3, 4].map((g) => h.slice(g * 8, g * 8 + 8));
+  const hexHtml = groups.map((g, i) => i === 0 ? `<span><span class="m">${esc(g.slice(0, 4))}</span>${esc(g.slice(4))}</span>`
+    : i === 4 ? `<span>${esc(g.slice(0, 4))}<span class="m">${esc(g.slice(4))}</span></span>` : `<span>${esc(g)}</span>`).join('');
+  $('#kt-main').innerHTML = `<button class="kt-addr" type="button" aria-label="Copy the $GHOST contract address ${esc(ca)}"><span class="hex"><span class="p">0x</span>${hexHtml}</span><span class="cp">Copy</span></button>`;
+  const btn = $('#kt-main .kt-addr');
+  btn.onclick = () => {
+    copy(ca, 'Contract address copied');
+    btn.classList.add('done'); btn.querySelector('.cp').textContent = 'Copied';
+    clearTimeout(btn._t); btn._t = setTimeout(() => { btn.classList.remove('done'); btn.querySelector('.cp').textContent = 'Copy'; }, 1800);
+  };
+  $('#kt-line').innerHTML = `Before you buy, match the start <b>${esc(head)}</b> and the end <b>${esc(tail)}</b> with our pinned post on X.`;
+  $('#kt-actions').innerHTML = `<a class="kt-buy" href="https://www.ponsfamily.com/launchpad/${lc}" target="_blank" rel="noopener">Buy on Pons<span class="ar">→</span></a>`
+    + `<a class="kt-link" href="https://dexscreener.com/robinhood/${lc}" target="_blank" rel="noopener">Chart<span class="ar">↗</span></a>`
+    + `<a class="kt-link" href="${EXPLORER}/token/${ca}" target="_blank" rel="noopener">Blockscout<span class="ar">↗</span></a>`;
 }
 
 // ============ angka live ============
@@ -493,6 +669,7 @@ async function setupDev() {
 
 // ---------- mulai ----------
 fillIcons();
+heroTitle();
 sky();
 watch();
 chrome().catch(() => {});
@@ -508,3 +685,6 @@ mountFees(document.getElementById('fees-strip'), { compact: true });
 mountChart(document.getElementById('dx-chart'));
 setupProof();
 setupDev();
+setupReceipts();
+setupShipped();
+setupPayDesk();

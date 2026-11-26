@@ -213,6 +213,56 @@ try {
   ({ r, j } = await post('/v1/chat/completions', { model: cheap.id, messages: [{ role: 'user', content: 'p' }] }, { Authorization: `Bearer ${bKey}` }));
   check('/v1 panggilan gratis ke-11 → 402 + pesan jelas', r.status === 402 && / /.test(j.error.message), J(j));
 
+  // ---------- Batas belanja kunci API: batas harian + kedaluwarsa ----------
+  const cw = Wallet.createRandom();
+  const cs = await signIn(cw);
+  q.run('UPDATE accounts SET balance_micro=5000000 WHERE wallet=?', cw.address.toLowerCase());
+  ({ r, j } = await post('/api/me/apikey', { label: 'bad', dailyCapUsd: -1 }, { cookie: cs.cookie }));
+  check('batas kunci: angka salah → 400 bad_cap', r.status === 400 && j.error === 'bad_cap');
+  ({ r, j } = await post('/api/me/apikey', { dailyCapUsd: 1, expiresInDays: 999 }, { cookie: cs.cookie }));
+  check('batas kunci: kedaluwarsa > 1 tahun → 400', r.status === 400 && j.error === 'bad_expiry');
+  ({ r, j } = await post('/api/me/apikey', { label: 'my agent', dailyCapUsd: 0.5, expiresInDays: 7 }, { cookie: cs.cookie }));
+  const cKey = j.apiKey, cPrefix = j.prefix;
+  check('kunci berbatas dibuat', r.status === 200 && j.key.label === 'my agent' && j.key.dailyCapUsd === 0.5 &&
+    Math.abs(j.key.expiresAt - Date.now() - 7 * 86400_000) < 60_000 && j.key.spentTodayUsd === 0, J(j));
+  const capCall = () => fetch(B + '/v1/chat/completions', { method: 'POST', headers: { Authorization: `Bearer ${cKey}`, 'Content-Type': 'application/json' },
+    body: J({ model: cheap.id, messages: [{ role: 'user', content: 'cap ping' }] }) });
+  jr = await capCall(); jj = await jr.json();
+  check('kunci berbatas: panggilan jalan + sisa batas di struk & header', jr.status === 200 && jj.ghostkey_receipt.paidBy === 'balance' &&
+    jj.ghostkey_receipt.keyDailyLimitLeftUsd <= 0.5 && jj.ghostkey_receipt.keyDailyLimitLeftUsd > 0 && jr.headers.get('x-ghostkey-key-limit-left') != null, J(jj.ghostkey_receipt));
+  ({ j } = await get('/api/me', { cookie: cs.cookie }));
+  const cView = j.apiKeys.find((k) => k.prefix === cPrefix);
+  check('/api/me: belanja hari ini per kunci tercatat', cView.spentTodayUsd > 0 && Math.abs(cView.spentTodayUsd - jj.ghostkey_receipt.costUsd) < 1e-6, J(cView));
+  const cId = q.one('SELECT id FROM api_keys WHERE prefix=?', cPrefix).id;
+  q.run("UPDATE daily_counters SET micro=500000 WHERE key=? AND day=?", `keyspend:${cId}`, new Date().toISOString().slice(0, 10));
+  jr = await capCall(); jj = await jr.json();
+  check('batas harian habis → 402 key_daily_limit_reached', jr.status === 402 && jj.error.code === 'key_daily_limit_reached' && /00:00 UTC/.test(jj.error.message), J(jj));
+  check('batas habis: saldo tidak tersentuh & tahanan 0', q.one('SELECT held_micro h FROM accounts WHERE wallet=?', cw.address.toLowerCase()).h === 0);
+  s = await sse('/v1/chat/completions', { model: cheap.id, stream: true, messages: [{ role: 'user', content: 'p' }] }, { Authorization: `Bearer ${cKey}` });
+  check('batas habis (stream) → 402', s.status === 402);
+  ({ r, j } = await post('/api/me/apikey/limits', { prefix: cPrefix, dailyCapUsd: 5 }, { cookie }));
+  check('akun lain tak bisa ubah batas kunci → 404', r.status === 404);
+  ({ r, j } = await post('/api/me/apikey/limits', { prefix: cPrefix, dailyCapUsd: 5 }, { cookie: cs.cookie }));
+  check('naikkan batas → label & kedaluwarsa tetap', r.status === 200 && j.key.dailyCapUsd === 5 && j.key.label === 'my agent' && j.key.expiresAt > Date.now(), J(j));
+  jr = await capCall();
+  check('setelah batas dinaikkan → jalan lagi', jr.status === 200);
+  q.run('UPDATE api_keys SET expires_at=? WHERE id=?', Date.now() - 1000, cId);
+  jr = await capCall(); jj = await jr.json();
+  check('kunci kedaluwarsa → 401 key_expired', jr.status === 401 && jj.error.code === 'key_expired', J(jj));
+  ({ j } = await get('/api/me', { cookie: cs.cookie }));
+  check('/api/me menandai kunci kedaluwarsa', j.apiKeys.find((k) => k.prefix === cPrefix).expired === true);
+  ({ r, j } = await post('/api/me/apikey/limits', { prefix: cPrefix, expiresInDays: null, dailyCapUsd: null }, { cookie: cs.cookie }));
+  jr = await capCall(); jj = await jr.json();
+  check('perpanjang (tak pernah kedaluwarsa, tanpa batas) → jalan, tanpa sisa batas di struk', r.status === 200 && j.key.expiresAt === null &&
+    jr.status === 200 && !('keyDailyLimitLeftUsd' in jj.ghostkey_receipt));
+  // Paralel: dua permintaan serentak tidak boleh menembus batas (tahanan per kunci dihitung)
+  ({ j } = await post('/api/me/apikey/limits', { prefix: cPrefix, dailyCapUsd: 0.01 }, { cookie: cs.cookie }));
+  q.run("UPDATE daily_counters SET micro=0 WHERE key=?", `keyspend:${cId}`);
+  const par = await Promise.all([0, 1, 2, 3].map(() => fetch(B + '/v1/chat/completions', { method: 'POST', headers: { Authorization: `Bearer ${cKey}`, 'Content-Type': 'application/json' },
+    body: J({ model: pricey.id, max_tokens: 4000, messages: [{ role: 'user', content: 'long answer please' }] }) }).then(async (x) => ({ st: x.status, j: await x.json() }))));
+  const spentAfter = q.one('SELECT micro FROM daily_counters WHERE key=?', `keyspend:${cId}`)?.micro || 0;
+  check('paralel: belanja kunci tak melewati batas', spentAfter <= 10_000, `belanja=${spentAfter} status=${par.map((x) => x.st).join(',')}`);
+
   // ---------- Pemakaian & ekspor ----------
   ({ j } = await get('/api/me/usage', { cookie }));
   check('/api/me/usage', Array.isArray(j) && j.length >= 3 && ['at', 'model', 'tokensIn', 'tokensOut', 'costUsd', 'source'].every((k) => k in j[0]));
@@ -372,7 +422,7 @@ try {
   const accountsBefore = j.accounts;
   check('/api/stats bentuk + angka dari DB', j.messages >= 20 && j.tokensServed > 0 && j.billedUsd > 0 && j.hoursPosted === 2 && j.lastHour?.hour === H2 &&
     Math.abs(j.holderCreditPaidUsd - (f1.distributedMicro + f2.distributedMicro) / 1e6) < 1e-9 && typeof j.updatedAt === 'number', J(j).slice(0, 220));
-  check('/api/stats: akun pending tidak dihitung', accountsBefore === 2);
+  check('/api/stats: akun pending tidak dihitung', accountsBefore === 3);   // w + burner + akun uji batas kunci
 
   // ---------- /api/proof & /proof ----------
   ({ j } = await get('/api/proof'));

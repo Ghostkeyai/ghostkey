@@ -13,3 +13,5 @@ docs/
 tools/deploy.sh
 tools/deploy-bot.sh
 .claude/
+launch-kit-ghostkey/
+brand/x-banner-*.png

@@ -101,9 +101,11 @@ const MARKETING = [
   /\b(diamond|gold|golden|silver|premium|vip|mix|push|top\s*\d+|fast)\s*trend(s|ing)?\b|\btrend(s|ing)?\s+(on|at|via|with)\s+@?(?!(x|twitter|dex|dex\s*screener|dexscreener|ct|coingecko|cmc|pons|robinhood|uniswap|the|our|my|your|it)\b)[a-z]\w*|\b(look|check)\s+into\s+.{0,25}trend|@(?!ghostkeyai(_bot)?\b)\w*(trend|boost|vote|push|kol|shill|promo|call|dexvra)\w*\b|@(?!ghostkeyai_bot\b)\w+bot\b/i,
   /\b(dex\w*|dexscreener)\s*(rocket|vote|votes|reaction|reactions|flames?|fire|boost|boosts)\b|\b(rocket|flames?|fire)\s*(vote|votes|reactions?)\b|\b\d+\s*(votes?|reactions?|rockets?|flames?)\s*(before|first|then)\b|\bbefore\s*(you\s*)?pay\b|\bpay\s*(after|later)\b|\b(real|actual)\s*(people|users|humans)\s*(not|no)\s*(bots?|fake)\b|\bnot\s*bots?\s*not\s*fake\b/i,
 ];
+// pola "Hello Admins, we promote DeFi, AI, Web3… through active crypto communities. DM for affordable promotion"
+MARKETING.push(/\b(we|i)\s+(promote|advertise|market|shill)\s+(defi|ai|web3|nfts?|gaming|presales?|meme|projects?|tokens?|coins?|crypto|your)\b|\bpromot\w*\b.{0,60}\bthrough\b.{0,40}\b(communit\w*|channels?|groups?|networks?|kols?)\b|\bdm\s+(me\s+|us\s+)?(for|to\s+(get|discuss|book|order))\b|\b(affordable|cheap|budget|low.?cost)\s+(promo\w*|marketing|listing|trending|rates?|prices?)\b|\b(promo\w*|marketing)\s*(&|and)\s*(collab\w*|partnerships?)\b|\b(hi|hello|hey|dear)\s+(admins?|devs?|owners?|team)\b.{0,200}\b(we|i|our|my)\b.{0,60}\b(promot\w*|marketing|advertis\w*|listing|collab\w*|partner\w*|trending)\b/is);
 const isMarketing = (t) => MARKETING.some((r) => r.test(t));
 // nama akun penjual jasa (mis. "MORGAN DEX PRO", "Trend Booster"): kalau pesannya juga menyinggung vote/boost/bayar → langsung blokir
-const SELLER_NAME = /\b(kols?\s*(owner|manager|agency|service\w*|network|hub)|trend\w*\s*(owner|manager|agent|desk)|dex\s*(pro|boost\w*|rocket|vote\w*|trend\w*|service\w*)|trend(ing)?\s*(boost\w*|service\w*|bot|pro)|boost(er|ing)?\s*(service\w*|pro)?|marketing|promoter|promotions?|listing\s*(agent|service)|volume\s*(bot|service)|kol\s*(agency|service))\b/i;
+const SELLER_NAME = /\b(\d+\s*x\s*gems?|gems?\s*(owner|calls?|hub)|calls?\s*(owner|hub)|\|\s*owner|owner\s*\||kols?\s*(owner|manager|agency|service\w*|network|hub)|trend\w*\s*(owner|manager|agent|desk)|dex\s*(pro|boost\w*|rocket|vote\w*|trend\w*|service\w*)|trend(ing)?\s*(boost\w*|service\w*|bot|pro)|boost(er|ing)?\s*(service\w*|pro)?|marketing|promoter|promotions?|listing\s*(agent|service)|volume\s*(bot|service)|kol\s*(agency|service))\b/i;
 const SELLER_TALK = /\b(vote|votes|boost|rocket|flames?|trend\w*|pay|paid|price|package|deliver\w*|service|promo\w*|listing|volume)\b/i;
 const strikes = new Map(); // userId → { n, at } (memori saja)
 function strike(uid) {
@@ -119,6 +121,7 @@ const MUTE = { can_send_messages: false, can_send_audios: false, can_send_docume
 
 async function onJoin(msg, user) {
   const chatId = msg.chat.id;
+  markSeen(user.id, true);
   // bot hanya boleh masuk bila ditambahkan admin; bot yang masuk sendiri / dibawa member → keluarkan
   if (user.is_bot) {
     if (user.id === me?.id) return;
@@ -271,6 +274,7 @@ async function onMessage(msg) {
     ownerNote(`🛡️ spam promo diblokir (pelanggaran ke-2): ${nameOf(from)} — "${text.slice(0, 120)}"`);
       return sayTemp(chatId, `${esc(nameOf(from))} was removed for repeated promo offers.`, 20_000);
     }
+    console.log('[guard] promo dihapus (peringatan 1)', from.id, nameOf(from));
     return sayTemp(chatId, `${esc(nameOf(from))}, promo and "DM me" offers aren't allowed here. A second one gets you removed.`, 20_000);
   }
 
@@ -299,6 +303,9 @@ async function onMessage(msg) {
     await tg('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
     return sayTemp(chatId, addrs.length ? `${esc(nameOf(from))}, I removed a contract address to keep fakes out. The real $GHOST address is behind /ca.` : `${esc(nameOf(from))}, I removed a link that looked like a scam. If it was legit, an admin can share it.`, 20_000);
   }
+  // lapis kedua: pesan yang lolos pola dibaca AI (hanya member baru atau yang memuat kata rawan)
+  markSeen(from.id, false);
+  if (await aiFlag(msg, text)) return;
   remember(chatId, nameOf(from), text);
   logChat(from, text);
   // usulan fitur (tanpa perintah): dinilai dulu; kalau memang usulan, bot menjawab sebagai penilai, bukan sebagai obrolan
@@ -444,12 +451,78 @@ function shouldAnswer(msg, text) {
   if (msg.chat.type === 'private') return true;
   return /\?\s*$|\?\s/.test(text) && RELEVANT.test(text);
 }
+// ---------- pemeriksa spam AI (lapis kedua) ----------
+// Pola regex hanya kenal kalimat yang sudah pernah dilihat. Pesan yang lolos pola dibaca model kecil (ZDR) bila
+// pengirimnya baru (< 3 hari sejak pertama terlihat) atau pesannya memuat kata rawan. Pagu harian AI_SPAM_DAILY (bawaan 500).
+const NEW_MS = 3 * 24 * 3600_000;
+const AI_DAILY = Number(process.env.AI_SPAM_DAILY || 500);
+const RISKY = /promo|promot|market|advert|\bdm\b|\bpm\b|inbox|message me|collab|partner|listing|\blist\b|trend|\bkols?\b|influenc|volume|boost|raid|\bcalls?\b|gems?\b|\d+\s*x\b|vip|service|agency|offer|rates?\b|price ?list|package|admins?\b|owner|airdrop|claim|reward|support|help ?desk|recover|invest|profit|earn|signal|pump|https?:\/\/|t\.me|@\w{4,}/i;
+let aiDay = '', aiUsed = 0;
+const aiSeenText = new Map();            // teks → hasil (hemat panggilan untuk spam salin-tempel)
+function markSeen(uid, joined) {
+  STATE.seen ||= {};
+  if (joined || !STATE.seen[uid]) { STATE.seen[uid] = Date.now(); seenDirty = true; }
+}
+let seenDirty = false;
+setInterval(() => {
+  if (!seenDirty) return; seenDirty = false;
+  const cut = Date.now() - 30 * 24 * 3600_000;                     // simpan 30 hari saja
+  for (const [k, v] of Object.entries(STATE.seen || {})) if (v < cut) delete STATE.seen[k];
+  saveState();
+}, 60_000).unref?.();
+async function aiJudge(text) {
+  const key = text.trim().toLowerCase().slice(0, 400);
+  if (aiSeenText.has(key)) return aiSeenText.get(key);
+  const day = new Date().toISOString().slice(0, 10);
+  if (day !== aiDay) { aiDay = day; aiUsed = 0; }
+  if (!OR_KEY || aiUsed >= AI_DAILY) return null;
+  aiUsed++;
+  try {
+    const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST', signal: AbortSignal.timeout(12_000),
+      headers: { authorization: `Bearer ${OR_KEY}`, 'content-type': 'application/json', 'HTTP-Referer': 'https://ghostkeyai.com', 'X-Title': 'GHOSTKEY Guard' },
+      body: JSON.stringify({ model: MODEL, max_tokens: 60, temperature: 0, reasoning: { enabled: false }, provider: { zdr: true, data_collection: 'deny' },
+        messages: [{ role: 'system', content: `You moderate the Telegram group of GHOSTKEY, a private AI chat app with the token $GHOST. Classify ONE message.
+"promo" = someone selling or advertising a service or another project: marketing, promotion, KOLs, trending, listings, volume, votes, calls/VIP/gem channels, "DM me/us", collab or partnership pitches from outsiders, recruiting, another token or group.
+"scam" = fake support or admin, airdrop/claim/reward bait, wallet recovery, investment or profit schemes, asking people to DM or click to fix something.
+"ok" = everything else, including members hyping $GHOST, asking about price, marketing plans, listings or partnerships for GHOSTKEY, complaining, joking, or saying they will shill it themselves.
+When unsure, answer ok. Reply with JSON only: {"label":"ok|promo|scam"}` },
+          { role: 'user', content: text.slice(0, 1200) }] }),
+    });
+    const j = await r.json();
+    const m = String(j.choices?.[0]?.message?.content || '').match(/"label"\s*:\s*"(ok|promo|scam)"/i);
+    const out = m ? m[1].toLowerCase() : null;
+    if (out) { aiSeenText.set(key, out); if (aiSeenText.size > 2000) aiSeenText.clear(); }
+    return out;
+  } catch (e) { console.warn('[ai-spam]', e.message); return null; }
+}
+async function aiFlag(msg, text) {
+  const from = msg.from, chatId = msg.chat.id;
+  if (msg.chat.type === 'private' || !text || text.length < 20 || text.startsWith('/')) return false;
+  const fresh = Date.now() - (STATE.seen?.[from.id] || 0) < NEW_MS;
+  if (!fresh && !RISKY.test(text)) return false;
+  const label = await aiJudge(text);
+  if (label !== 'promo' && label !== 'scam') return false;
+  await tg('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
+  const n = strike(from.id);
+  if (n >= 2 || label === 'scam') {
+    await tg('banChatMember', { chat_id: chatId, user_id: from.id });
+    console.log(`[guard] AI ${label} diblokir`, from.id, nameOf(from));
+    ownerNote(`🛡️ AI memblokir ${label}: ${nameOf(from)} — "${text.slice(0, 120)}"`);
+    return sayTemp(chatId, label === 'scam' ? `Removed a likely scam from ${esc(nameOf(from))}. Admins never DM first, and the only $GHOST address is behind /ca.` : `${esc(nameOf(from))} was removed for repeated promo offers.`, 20_000).then(() => true);
+  }
+  console.log(`[guard] AI ${label} dihapus (peringatan 1)`, from.id, nameOf(from));
+  ownerNote(`🛡️ AI menghapus promo: ${nameOf(from)} — "${text.slice(0, 120)}"`);
+  await sayTemp(chatId, `${esc(nameOf(from))}, promo and "DM me" offers aren't allowed here. A second one gets you removed.`, 20_000);
+  return true;
+}
+
 async function agentReply(msg, text) {
   const chatId = msg.chat.id, now = Date.now(), day = new Date().toISOString().slice(0, 10);
   if (day !== today) { today = day; used = 0; }
-  if (!OR_KEY || used >= DAILY) return;
-  if (now - (lastReply.get(chatId) || 0) < 4000) return;            // jeda grup
-  if (now - (userLast.get(msg.from.id) || 0) < 15000) return;        // jeda per orang
+  if (!OR_KEY || used >= DAILY) { console.log('[agent] lewat: pagu harian', used); return; }
+  if (now - (lastReply.get(chatId) || 0) < 4000) { console.log('[agent] lewat: jeda grup', nameOf(msg.from)); return; }
+  if (now - (userLast.get(msg.from.id) || 0) < 15000) { console.log('[agent] lewat: jeda orang', nameOf(msg.from)); return; }
   lastReply.set(chatId, now); userLast.set(msg.from.id, now); used++;
   const ca = await officialCA();
   const ctx = (history.get(chatId) || []).slice(-12).map((h) => `${h.who}: ${h.text}`).join('\n');
@@ -464,12 +537,13 @@ async function agentReply(msg, text) {
     });
     const j = await r.json();
     let out = j.choices?.[0]?.message?.content?.trim();
-    if (!out) return;
+    if (!out) { console.log('[agent] jawaban kosong', JSON.stringify(j.error || {}).slice(0, 160)); return; }
     // jaga-jaga: buang alamat 0x selain CA resmi & GhostLedger
     const okA = await projectAddrs();
     out = out.replace(ADDR_RE, (a) => (ca && ca.toLowerCase() === a.toLowerCase()) || okA.has(a.toLowerCase()) ? a : '(see /ca)');
     await tg('sendMessage', { chat_id: chatId, text: out.slice(0, 1200), disable_web_page_preview: true, reply_to_message_id: msg.message_id, allow_sending_without_reply: true });
     remember(chatId, 'ghost (you)', out);
+    console.log('[agent] membalas', nameOf(msg.from), '·', out.length, 'huruf');
   } catch (e) { console.warn('[agent]', e.message); }
 }
 
@@ -484,6 +558,31 @@ await tg('setMyCommands', { commands: [
   { command: 'x', description: 'GHOSTKEY on X' },
   { command: 'request', description: 'Suggest a feature (reviewed and logged)' },
 ] });
+
+// ---------- Saldo OpenRouter: lapor ke pemilik saat menipis ----------
+// Sisa = yang terkecil dari (saldo akun) dan (sisa batas kunci). Lapor sekali per tingkat (OR_LOW_USD bawaan 5, lalu 2),
+// lapor lagi kalau sudah diisi ulang. Cek tiap 15 menit.
+const OR_LOW = Number(process.env.OR_LOW_USD || 5);
+let orLevel = 0;
+async function checkOpenRouter() {
+  if (!OR_KEY) return;
+  try {
+    const h = { authorization: `Bearer ${OR_KEY}` };
+    const c = (await (await fetch('https://openrouter.ai/api/v1/credits', { headers: h, signal: AbortSignal.timeout(15_000) })).json()).data;
+    const k = (await (await fetch('https://openrouter.ai/api/v1/key', { headers: h, signal: AbortSignal.timeout(15_000) })).json()).data;
+    const acct = c ? c.total_credits - c.total_usage : Infinity;
+    const keyLeft = k && k.limit != null ? k.limit_remaining : Infinity;
+    const left = Math.min(acct, keyLeft);
+    if (!Number.isFinite(left)) return;
+    console.log('[openrouter] sisa', left.toFixed(2), '(akun', acct.toFixed(2) + ', kunci', Number.isFinite(keyLeft) ? keyLeft.toFixed(2) : 'tanpa batas', ')');
+    const why = keyLeft < acct ? `batas kunci API tinggal $${keyLeft.toFixed(2)} (saldo akun $${acct.toFixed(2)}): naikkan limit kunci di openrouter.ai/settings/keys` : `saldo akun tinggal $${acct.toFixed(2)}: isi ulang di openrouter.ai/settings/credits`;
+    const lvl = left < 2 ? 2 : left < OR_LOW ? 1 : 0;
+    if (lvl > orLevel) ownerNote(`${lvl === 2 ? '🚨 GAWAT' : '⚠️'} OpenRouter menipis: ${why}. Kalau habis, chat di situs dan jawaban bot berhenti.`);
+    else if (lvl === 0 && orLevel > 0) ownerNote(`✅ OpenRouter sudah aman lagi: sisa $${left.toFixed(2)}.`);
+    orLevel = lvl;
+  } catch (e) { console.warn('[openrouter]', e.message); }
+}
+setTimeout(checkOpenRouter, 20_000); setInterval(checkOpenRouter, 15 * 60_000);
 
 // ---------- Notifikasi buy $GHOST (curve Pons) ----------
 // Membaca event CurveBuy langsung dari chain tiap ~10 dtk lalu memposting ke grup. Tanpa layanan pihak ketiga.

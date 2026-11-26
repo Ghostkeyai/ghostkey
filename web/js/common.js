@@ -192,15 +192,14 @@ export function paintIcons(root = document, size = 14) {
   }
 }
 
-// Logo piksel: kunci kecil (sama dengan favicon)
-export const MARK = '<svg class="mark" viewBox="0 0 12 8" width="24" height="16" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M1 1h3v1H1zM0 2h1v4H0zM4 2h1v4H4zM1 6h3v1H1zM5 3h7v1H5zM9 4h1v2H9zM11 4h1v1h-1z"/></svg>';
+// Logo: hantu piksel memegang kunci emas (sama dengan foto profil X), ukuran asli 44×36 → tajam tanpa blur
+export const MARK = '<img class="mark" src="/img/ghost.svg" width="44" height="36" alt="" aria-hidden="true">';
 
-// Favicon kunci mint bila halaman belum memasang sendiri
+// Favicon hantu bila halaman belum memasang sendiri
 function ensureFavicon() {
   if (document.querySelector('link[rel~="icon"]')) return;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1 -3 14 14" shape-rendering="crispEdges"><rect x="-1" y="-3" width="14" height="14" fill="#121413"/><path fill="#9ff0c8" d="M1 1h3v1H1zM0 2h1v4H0zM4 2h1v4H4zM1 6h3v1H1zM5 3h7v1H5zM9 4h1v2H9zM11 4h1v1h-1z"/></svg>`;
   const l = document.createElement('link');
-  l.rel = 'icon'; l.type = 'image/svg+xml'; l.href = 'data:image/svg+xml,' + encodeURIComponent(svg);
+  l.rel = 'icon'; l.type = 'image/svg+xml'; l.href = '/img/favicon.svg';
   document.head.appendChild(l);
 }
 
@@ -260,7 +259,7 @@ export async function chrome() {
           ${cfg.ghostToken ? `<p class="foot-ca mono">$GHOST <a class="link" href="${tokenUrl(cfg.ghostToken)}" target="_blank" rel="noopener">${cfg.ghostToken}</a></p>` : `<p class="foot-ca mono dim">$GHOST contract: not launched yet</p>`}
         </div>
         <div><h4>Product</h4><a href="/app">Chat</a><a href="/models">Models &amp; prices</a><a href="/privacy">Privacy inspector</a><a href="/account">Balance &amp; API key</a></div>
-        <div><h4>Verify</h4><a href="/proof">Proof</a><a href="/token">Ghost Credit ledger</a><a href="/roadmap">Roadmap</a><a href="/api/stats" target="_blank" rel="noopener">/api/stats</a><a href="/v1/models" target="_blank" rel="noopener">/v1/models</a></div>
+        <div><h4>Verify</h4><a href="/proof">Proof</a><a href="/token">Ghost Credit ledger</a><a href="/report">Fee report</a><a href="/roadmap">Roadmap</a><a href="/api/stats" target="_blank" rel="noopener">/api/stats</a><a href="/v1/models" target="_blank" rel="noopener">/v1/models</a></div>
         <div><h4>Community</h4>${ext(L.x, 'X')}${ext(L.telegram, 'Telegram')}${ext(L.github, 'GitHub')}${ext(L.pons, '$GHOST on Pons')}<a href="/docs">Docs</a><a href="/llms.txt">llms.txt</a></div>
       </div>
       <div class="legal"><span>Your GHOSTKEY balance is prepaid AI credit held by the GHOSTKEY server. It is not a deposit, an investment or a token.</span><span><a href="/docs#terms">Terms</a> · <a href="/docs#privacy">Privacy</a></span></div>
