@@ -124,11 +124,11 @@ function receiptHtml(r, idx) {
   return `<div class="rcpt">
     <div class="rcpt-math">
       <span><b>${int(tin)}</b> in × ${rate(ri)}</span><span class="op">+</span>
-      <span><b>${int(tout)}</b> out × ${rate(ro)}</span><span class="op">per 1M</span><span class="op">${differs ? '≈' : '='}</span>
+      <span><b>${int(tout)}</b> out × ${rate(ro)}</span><span class="op">per 1M</span><span class="op">${differs ? '· billed' : '='}</span>
       <span class="total">${usd(cost, { max: 6 })}</span>
     </div>
     ${r.mock ? '<div class="why" style="color:var(--gold)">Local test mode: this answer is a placeholder, no model was called and nothing was billed.</div>' : ''}
-    ${differs ? '<div class="why">Billed amount is the exact cost OpenRouter reported. It can include reasoning or cached tokens.</div>' : ''}
+    ${differs ? `<div class="why">At listed rates this would be ${usd(calc, { max: 7 })}. Billed is the exact cost OpenRouter reported for this answer, which differs when the provider that served it charges another rate or reasoning or cached tokens are counted.</div>` : ''}
     <div class="rcpt-foot">
       <span class="paid">${esc(paid)}</span>
       <span>Stored: ${esc(stored)}</span>
