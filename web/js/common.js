@@ -218,7 +218,7 @@ export async function chrome() {
     head.classList.add('nav');
     head.innerHTML = `<div class="wrap">
       <a class="brand" href="/" aria-label="GHOSTKEY home">${MARK}<b>GHOSTKEY</b></a>
-      <nav class="nav-links" aria-label="Main">${NAV.map(([h, t]) => `<a href="${h}"${here.startsWith(h) ? ' aria-current="page"' : ''}>${t}</a>`).join('')}</nav>
+      <nav class="nav-links" aria-label="Main">${NAV.map(([h, t]) => `<a href="${h}"${h === '/token' ? ' class="nav-ghost"' : ''}${here.startsWith(h) ? ' aria-current="page"' : ''}>${t}</a>`).join('')}</nav>
       <div class="nav-right"><span id="nav-soc" class="nav-soc"></span><span id="nav-ca"></span><span id="nav-acct"></span></div>
       <button class="nav-burger" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
     </div>`;

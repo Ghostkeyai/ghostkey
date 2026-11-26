@@ -54,7 +54,7 @@ async function readChain() {
 }
 
 async function build() {
-  const out = { token: config.ghostToken || null, holderShareBps: config.holderShareBps, harvestMinute: config.harvestMinute,
+  const out = { token: config.ghostToken || null, holderShareBps: config.holderShareBps, harvestMinute: config.harvestMinute, creditMinute: config.creditMinute,
     claimed: claimedTotals(), pending: null, ethUsd: null, updatedAt: Date.now() };
   if (!config.ghostToken) return out;
   let px = null;

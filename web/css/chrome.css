@@ -32,6 +32,9 @@ code.inline { font: 13px var(--font-mono); background: #ffffff0d; border: 1px so
 .nav-links a:hover { color: var(--ink); }
 .nav-links a[aria-current="page"] { color: var(--ink); }
 .nav-links a[aria-current="page"]::before { content: ""; width: 6px; height: 6px; background: var(--mint); }
+/* $GHOST menyala hijau di menu (permintaan 27 Nov) */
+.nav-links a.nav-ghost { color: var(--mint); text-shadow: 0 0 8px #9ff0c8aa, 0 0 18px #9ff0c855; }
+.nav-links a.nav-ghost:hover, .nav-links a.nav-ghost[aria-current="page"] { color: #c9ffe4; text-shadow: 0 0 10px #9ff0c8cc, 0 0 22px #9ff0c877; }
 .nav-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .nav-soc { display: inline-flex; gap: 6px; }
 .nav-soc:empty { display: none; }
