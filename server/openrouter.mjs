@@ -6,7 +6,7 @@ import { kvGet, kvSet } from './db.mjs';
 import { buildUpstream, ZDR_LIST_URL } from './privacy.mjs';
 
 const BASE = 'https://openrouter.ai/api/v1';
-const CATALOG_TTL = 60 * 60_000;     // 1 jam
+const CATALOG_TTL = 10 * 60_000;     // 10 menit (harga OpenRouter bisa berubah dalam sejam; 26 Nov: 242/243 karena salinan per jam)
 let catalog = null;                  // { at, list, byId, source }
 let refreshing = null;
 

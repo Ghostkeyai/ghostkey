@@ -174,10 +174,10 @@ async function compare() {
         <span class="lbl">${differs ? `prices match · <b class="bad">${int(differs)} differ</b>` : '<b>prices match exactly</b>'}</span></div>
       <dl class="kv" style="margin-top:14px">
         <div><dt>Downloaded from openrouter.ai</dt><dd>${int(orRes.value.length)} models · ${ms} ms</dd></div>
-        ${missing ? `<div><dt>Not on OpenRouter's list right now</dt><dd>${int(missing)}<small>our copy refreshes every hour</small></dd></div>` : ''}
+        ${missing ? `<div><dt>Not on OpenRouter's list right now</dt><dd>${int(missing)}<small>our copy refreshes every 10 minutes</small></dd></div>` : ''}
         <div><dt>Method</dt><dd>price per token × 1,000,000<small>rounded to 4 decimals on both sides</small></dd></div>
       </dl>
-      ${differs ? '<p class="hint" style="margin-top:10px">A difference usually means OpenRouter changed a price in the last hour. You are always billed the exact cost OpenRouter reports for your request. Rows that differ are marked in the table.</p>' : ''}`;
+      ${differs ? '<p class="hint" style="margin-top:10px">A difference usually means OpenRouter changed a price in the last 10 minutes. You are always billed the exact cost OpenRouter reports for your request. Rows that differ are marked in the table.</p>' : ''}`;
   } else {
     out.innerHTML = `<div class="notice bad" style="margin-top:14px">Your browser could not download OpenRouter's price list (${esc(orRes.reason?.message || 'blocked')}). An ad blocker or strict network can cause this. Open <a class="link" href="${OR_MODELS}" target="_blank" rel="noopener">the list</a> directly: <span class="mono">pricing.prompt × 1,000,000</span> is the input price on this page.</div>`;
   }
@@ -201,7 +201,7 @@ async function compare() {
         <span class="lbl">${ok === all.length ? '<b>every model has a ZDR provider</b>' : `models found · <b class="bad">${int(all.length - ok)} not on the list now</b>`}</span></div>
       <dl class="kv" style="margin-top:14px">
         <div><dt>ZDR endpoints on OpenRouter's list</dt><dd>${int(zdrRes.value.length)}</dd></div>
-        ${extra ? `<div><dt>Provider names that differ</dt><dd>${int(extra)} models<small>our copy refreshes every hour</small></dd></div>` : ''}
+        ${extra ? `<div><dt>Provider names that differ</dt><dd>${int(extra)} models<small>our copy refreshes every 10 minutes</small></dd></div>` : ''}
       </dl>
       <p class="hint" style="margin-top:10px">Even if a list changes, every request carries <span class="mono">provider.zdr: true</span>. OpenRouter then refuses any provider that is not zero-retention.</p>`;
   } else {
