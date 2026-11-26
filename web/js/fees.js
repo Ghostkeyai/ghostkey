@@ -55,9 +55,18 @@ function tickClock(root) {
   const ci = untilMinute(now, claim), cr = untilMinute(now, credit);
   // jendela 2 menit sesudah menit target: proses sedang berjalan
   c.querySelector('[data-claim-in]').textContent = 3600 - ci < 120 ? 'Claiming now' : `in ${mmss(ci)}`;
-  c.querySelector('[data-credit-in]').textContent = 3600 - cr < 120 ? 'Sending now' : `in ${mmss(cr)}`;
-  const h = new Date(now.getTime() + cr * 1000 - 3600_000);   // jam yang dibayar di :05 berikutnya = jam sebelumnya
-  c.querySelector('[data-credit-for]').textContent = `At ${pad(new Date(now.getTime() + cr * 1000).getUTCHours())}:${pad(credit)} UTC: credit for ${pad(h.getUTCHours())}:00–${pad((h.getUTCHours() + 1) % 24)}:00 UTC.`;
+  // jendela kirim: 2 menit sesudah :05, selama ledger belum memuat jam yang baru ditutup
+  const closed = Math.floor(now.getTime() / 3600_000) - 1;             // indeks jam yang baru ditutup
+  const sending = 3600 - cr < 120 && Number(c.dataset.lastHour || -1) < closed;
+  if (sending) {
+    const h = new Date(closed * 3600_000);
+    c.querySelector('[data-credit-in]').textContent = 'Sending now';
+    c.querySelector('[data-credit-for]').textContent = `Credit for ${pad(h.getUTCHours())}:00–${pad((h.getUTCHours() + 1) % 24)}:00 UTC is going out.`;
+  } else {
+    const at = new Date(now.getTime() + cr * 1000), h = new Date(at.getTime() - 3600_000);   // jam yang dibayar = jam sebelumnya
+    c.querySelector('[data-credit-in]').textContent = `in ${mmss(cr)}`;
+    c.querySelector('[data-credit-for]').textContent = `At ${pad(at.getUTCHours())}:${pad(credit)} UTC: credit for ${pad(h.getUTCHours())}:00–${pad((h.getUTCHours() + 1) % 24)}:00 UTC.`;
+  }
 }
 async function lastPayout(root) {
   const c = root.querySelector('.fz-clock'); if (!c) return;
@@ -65,6 +74,7 @@ async function lastPayout(root) {
     const s = await api('/api/stats'); const L = s.lastHour;
     if (!L) { c.querySelector('[data-last-sub]').textContent = 'No hour posted yet.'; return; }
     const st = new Date(L.startsAt), a = pad(st.getUTCHours()), b = pad((st.getUTCHours() + 1) % 24);
+    c.dataset.lastHour = String(Math.floor(st.getTime() / 3600_000)); tickClock(root);
     c.querySelector('[data-last]').textContent = usd(L.distributedUsd, { max: 2 });
     c.querySelector('[data-last-sub]').innerHTML = `${a}:00–${b}:00 UTC · ${L.entries} wallet${L.entries === 1 ? '' : 's'}${L.txHash ? ` · <a class="link" href="${txUrl(L.txHash)}" target="_blank" rel="noopener">root tx</a>` : ''} · ${usd(s.holderCreditPaidUsd, { max: 2 })} paid in all`;
   } catch { c.querySelector('[data-last-sub]').textContent = 'Ledger unavailable right now.'; }
