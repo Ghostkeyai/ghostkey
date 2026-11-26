@@ -1,5 +1,13 @@
 [
   {
+    "id": "2026-11-27-pdf-chat",
+    "date": "2026-11-27",
+    "title": "Chat with your PDFs, privately",
+    "what": "Attach a PDF in the chat and ask about it. Your browser reads the text out of the file, so the file is never uploaded and no OCR service sees it. Only the text goes out, inside your message, and \"What we sent\" marks it. Before you send, the app shows the page count, the token estimate and what it will cost on the model you picked. Send with no question and you get a summary.",
+    "link": "https://ghostkeyai.com/app",
+    "cta": "Attach a PDF"
+  },
+  {
     "id": "2026-11-26-fee-report",
     "date": "2026-11-26",
     "title": "Monthly fee report you can re-check",

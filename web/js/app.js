@@ -2,6 +2,7 @@
 // struk per jawaban (token × tarif = biaya) dan laci "What we sent" (receipt.forwarded).
 import { api, chrome, getConfig, clientId, esc, usd, int, compact, rate, labOf, toast, copy, me, signIn, pix, downloadJson, ZDR_LIST, ago } from '/js/common.js';
 import { jsonHtml } from '/js/jsonview.js';
+import { readPdf, estTokens, docMessage, ERR_TEXT as PDF_ERR } from '/js/pdf-attach.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const CID = clientId();
@@ -86,6 +87,10 @@ function cleanPersona(x) {
   if (!name || !instructions) return null;
   return { id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, model: String(x.model || '').slice(0, 120), instructions, at: Date.now() };
 }
+// Lampiran PDF untuk pesan berikutnya: { state: 'reading'|'ready'|'error', name, i, n, doc, err }
+let attached = null;
+const DOC_MAX_CHARS = 200_000;      // ≈50k token: batas satu pesan berdokumen (server menolak >400k karakter total)
+const DOC_FREE_CHARS = 100_000;     // tanpa saldo (pesan gratis): ≈25k token
 let persona = null;          // persona untuk chat baru (chat lama membawa salinannya sendiri)
 
 // ---------- Markdown ringan yang aman (escape dulu, baru format) ----------
@@ -165,6 +170,7 @@ function setModel(m) {
   $('#m-name').textContent = m.name;
   $('#m-rate').textContent = `${rate(m.in)} in · ${rate(m.out)} out /1M`;
   try { localStorage.setItem(KEY_MODEL, m.id); } catch {}
+  if (attached) renderAtt();
 }
 
 function defaultModel() {
@@ -286,7 +292,8 @@ function msgEl(m, idx) {
   const el = document.createElement('div');
   el.className = `msg ${m.role === 'user' ? 'user' : 'ai'}`;
   if (m.role === 'user') {
-    el.innerHTML = `<div class="bubble">${esc(typeof m.content === 'string' ? m.content : '')}</div>`;
+    const shown = m.doc ? (m.ask ?? '') : (typeof m.content === 'string' ? m.content : '');
+    el.innerHTML = `<div class="bubble">${m.doc ? `<div class="doc-chip">${pix('doc', 12)}<b>${esc(m.doc.name)}</b><span>${int(m.doc.pages)} page${m.doc.pages === 1 ? '' : 's'} · read in this browser</span></div>` : ''}${esc(shown)}</div>`;
   } else {
     el.innerHTML = `<div class="who">${pix('ghost', 14)}${esc(byId.get(m.model)?.name || m.model || '')}</div><div class="body">${md(m.content)}</div>${receiptHtml(m.receipt, idx)}`;
   }
@@ -333,19 +340,26 @@ function errorBlock(code, message) {
 async function send(text) {
   if (busy) { busy.abort(); return; }
   text = String(text || '').trim();
-  if (!text) return;
+  if (attached?.state === 'reading') return toast('Still reading the PDF');
+  const doc = attached?.state === 'ready' ? attached.doc : null;
+  if (doc && docBlocked(doc)) return toast(docBlocked(doc));
+  if (!text && !doc) return;
   if (!model) return toast('Models are still loading');
+  const ask = text || 'Summarize this document.';
   if (!chat) {
-    chat = { id: 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: text.slice(0, 70), model: model.id, messages: [], at: Date.now(),
+    chat = { id: 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: (doc ? `${doc.name}: ${ask}` : text).slice(0, 70), model: model.id, messages: [], at: Date.now(),
       persona: persona ? { id: persona.id, name: persona.name, instructions: persona.instructions } : null };
     $('#thread').innerHTML = '';
   }
   chat.model = model.id;
-  const userMsg = { role: 'user', content: text };
+  // Dokumen: teks PDF (dibaca di browser) + pertanyaan jadi satu pesan biasa; berkasnya tidak pernah dikirim
+  const userMsg = doc ? { role: 'user', content: docMessage(doc, ask), ask, doc: { name: doc.name, pages: doc.pages, chars: doc.chars } }
+    : { role: 'user', content: text };
   chat.messages.push(userMsg);
   const t = $('#thread');
   t.appendChild(msgEl(userMsg));
   $('#prompt').value = ''; autosize();
+  if (doc) { attached = null; renderAtt(); }
 
   const ai = { role: 'assistant', content: '', model: model.id };
   const el = msgEl(ai);
@@ -469,6 +483,7 @@ function openDrawer(r) {
         maxStr: 700,
         mark: (p) => (p === 'body.provider' ? { cls: 'hl', note: 'forced by GHOSTKEY' }
           : p === 'body.messages[0]' && fwd.body?.messages?.[0]?.role === 'system' ? { cls: 'hl', note: 'your persona, from this browser' }
+          : /^body\.messages\[\d+\]$/.test(p) && /^<document /.test(fwd.body?.messages?.[Number(p.match(/\d+/)[0])]?.content || '') ? { cls: 'hl', note: 'text of your PDF, read in this browser' }
           : /^headers\.authorization$/i.test(p) ? { cls: 'hl', note: 'our shared key' } : null),
       })}</pre>` : '<div class="notice warn" style="margin-top:10px">This answer came without a copy of the request. Use the <a class="link" href="/privacy#inspector">inspector</a> to see what GHOSTKEY sends.</div>'}
     </div>
@@ -595,6 +610,61 @@ const closeSide = () => $('#shell').classList.remove('side-open');
 
 function autosize() { const ta = $('#prompt'); ta.style.height = 'auto'; ta.style.height = Math.min(240, ta.scrollHeight) + 'px'; }
 
+// ---------- Lampiran PDF ----------
+// Alasan dokumen tidak bisa dikirim dengan model/saldo sekarang ('' = boleh)
+function docBlocked(doc) {
+  const paid = account && Number(account.balanceUsd) > 0;
+  const lim = paid ? DOC_MAX_CHARS : DOC_FREE_CHARS;
+  if (doc.chars > lim) return paid
+    ? `This PDF has about ${int(estTokens(doc.chars))} tokens of text. One message carries up to about ${int(estTokens(lim))}. Attach fewer pages.`
+    : `Free messages carry up to about ${int(estTokens(lim))} tokens of PDF text, and this one has about ${int(estTokens(doc.chars))}. Add balance for longer files, or attach fewer pages.`;
+  if (model?.context && estTokens(doc.chars) > model.context * 0.8) return `Too long for ${model.name} (${compact(model.context)} context). Pick a model with a larger context.`;
+  return '';
+}
+function renderAtt() {
+  const box = $('#att');
+  if (!attached) { box.hidden = true; box.innerHTML = ''; box.classList.remove('bad'); return; }
+  box.hidden = false;
+  const a = attached;
+  const x = '<button class="att-x" type="button" data-att-x aria-label="Remove the PDF">×</button>';
+  if (a.state === 'reading') {
+    const pct = a.n ? Math.round((a.i / a.n) * 100) : 4;
+    box.classList.remove('bad');
+    box.innerHTML = `<div class="att-top">${pix('doc', 14)}<span class="att-n">${esc(a.name)}</span><span class="att-m">${a.n ? `reading page ${int(a.i)} of ${int(a.n)} in this browser` : 'opening in this browser'}</span>${x}</div><div class="att-bar"><i style="width:${pct}%"></i></div>`;
+    return;
+  }
+  if (a.state === 'error') {
+    box.classList.add('bad');
+    box.innerHTML = `<div class="att-top">${pix('warn', 14)}<span class="att-n">${esc(a.name)}</span>${x}</div><p class="att-note">${esc(a.err)}</p>`;
+    return;
+  }
+  const d = a.doc, tok = estTokens(d.chars), why = docBlocked(d);
+  const cost = model ? (tok * Number(model.in || 0)) / 1e6 : 0;
+  box.classList.toggle('bad', !!why);
+  box.innerHTML = `<div class="att-top">${pix(why ? 'warn' : 'doc', 14)}<span class="att-n">${esc(d.name)}</span><span class="att-m">${int(d.pages)} page${d.pages === 1 ? '' : 's'} · ~${compact(tok)} tokens${model ? ` · ${cost > 0 && cost < 0.00001 ? 'under $0.00001' : `~${usd(cost, { max: 5 })}`} to send` : ''}</span>${x}</div>
+    ${why ? `<p class="att-note">${esc(why)}</p>` : ''}
+    <p class="att-note"><b>Read in this browser.</b> Only the text goes out, inside your message, and the file never leaves this device.${d.totalPages > d.pages ? ` Only the first ${int(d.pages)} of ${int(d.totalPages)} pages were read.` : ''}${d.emptyPages ? ` ${int(d.emptyPages)} page${d.emptyPages === 1 ? ' has' : 's have'} no text, so ${d.emptyPages === 1 ? 'it is' : 'they are'} skipped.` : ''} Send with no question for a summary. Follow-ups in this chat send the text again, like the rest of the conversation.</p>
+    <details><summary>Preview the text that will be sent</summary><pre>${esc(d.text.slice(0, 2000))}${d.text.length > 2000 ? '\n…' : ''}</pre></details>`;
+}
+async function attachFile(file) {
+  if (!file) return;
+  if (busy) return toast('Wait for the answer to finish');
+  const mine = attached = { state: 'reading', name: file.name || 'document.pdf', i: 0, n: 0 };
+  renderAtt();
+  try {
+    const doc = await readPdf(file, (i, n) => { if (attached !== mine) return; mine.i = i; mine.n = n; renderAtt(); });
+    if (attached !== mine) return;                       // dibatalkan saat membaca
+    attached = { state: 'ready', name: doc.name, doc };
+    if (!$('#prompt').value.trim()) $('#prompt').placeholder = 'Ask about this PDF';
+  } catch (e) {
+    if (attached !== mine) return;
+    attached = { state: 'error', name: mine.name, err: PDF_ERR[e.code] || PDF_ERR.broken };
+  }
+  renderAtt();
+  $('#prompt').focus();
+}
+function clearAtt() { attached = null; renderAtt(); $('#prompt').placeholder = 'Ask anything.'; refreshFree(); }
+
 // ---------- Mulai ----------
 async function init() {
   $('#side-toggle').innerHTML = pix('menu', 14);
@@ -611,6 +681,15 @@ async function init() {
   $('#form').addEventListener('submit', (e) => { e.preventDefault(); send($('#prompt').value); });
   $('#prompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send($('#prompt').value); } });
   $('#prompt').addEventListener('input', autosize);
+  // Lampiran PDF: tombol, pilih berkas, seret-lepas ke kotak tulis
+  $('#att-btn').innerHTML = pix('doc', 16);
+  $('#att-btn').onclick = () => $('#att-file').click();
+  $('#att-file').addEventListener('change', (e) => { const f = e.target.files?.[0]; e.target.value = ''; attachFile(f); });
+  $('#att').addEventListener('click', (e) => { if (e.target.closest('[data-att-x]')) clearAtt(); });
+  const comp = $('.composer');
+  comp.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); comp.classList.add('drop'); } });
+  comp.addEventListener('dragleave', (e) => { if (!comp.contains(e.relatedTarget)) comp.classList.remove('drop'); });
+  comp.addEventListener('drop', (e) => { e.preventDefault(); comp.classList.remove('drop'); attachFile(e.dataTransfer?.files?.[0]); });
   $('#new-chat').onclick = newChat;
   $('#model-btn').onclick = () => openPicker();
   $('#m-close').onclick = closePicker;

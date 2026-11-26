@@ -442,7 +442,8 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
   '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif',
   '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.json': 'application/json', '.woff2': 'font/woff2', '.woff': 'font/woff',
   '.mp4': 'video/mp4', '.webm': 'video/webm', '.glb': 'model/gltf-binary', '.txt': 'text/plain; charset=utf-8',
-  '.xml': 'application/xml; charset=utf-8', '.webmanifest': 'application/manifest+json' };
+  '.xml': 'application/xml; charset=utf-8', '.webmanifest': 'application/manifest+json',
+  '.bcmap': 'application/octet-stream' };   // peta karakter pdf.js (teks PDF dibaca di browser)
 const DEFAULT_HOST = 'https://ghostkeyai.com';
 
 function cacheFor(path, ext) {
