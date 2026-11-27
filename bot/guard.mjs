@@ -208,7 +208,7 @@ async function onMessage(msg) {
   if (cmd) {
     const ca = await officialCA();
     const R = {
-      ca: ca ? `<b>$GHOST contract</b> (Robinhood Chain)\n<code>${ca}</code>\n\nPons: https://www.ponsfamily.com/launchpad/${ca.toLowerCase()}\nSame address on ghostkeyai.com` : 'The $GHOST contract is not published yet. When it is, this command, the pinned message and ghostkeyai.com show the same address.',
+      ca: caText(ca),
       site: 'https://ghostkeyai.com — chat with 200+ AI models. Your wallet, IP and device never reach the model.',
       proof: 'Every claim with a way to check it: https://ghostkeyai.com/proof',
       x: 'https://x.com/ghostkeyai',
@@ -236,6 +236,7 @@ async function onMessage(msg) {
       return;
     }
     if (/^\/diam\b/i.test(text)) { STATE.owners = (STATE.owners || []).filter((x) => x !== from.id); saveState(); await tg('sendMessage', { chat_id: chatId, text: 'Oke, laporan dihentikan. Ketik /laporan untuk menyalakan lagi.' }); return; }
+    if (isCaAsk(text)) return caReply(msg);
     if (shouldAnswer(msg, text)) await agentReply(msg, text);
     return;
   }
@@ -309,9 +310,29 @@ async function onMessage(msg) {
   STATE.clean ||= {}; STATE.clean[from.id] = (STATE.clean[from.id] || 0) + 1; seenDirty = true;
   remember(chatId, nameOf(from), text);
   logChat(from, text);
+  if (isCaAsk(text)) return caReply(msg);
   // usulan fitur (tanpa perintah): dinilai dulu; kalau memang usulan, bot menjawab sebagai penilai, bukan sebagai obrolan
   if (REQ_HINT.test(text) && text.length >= 12 && text.length <= 800 && await triage(msg, text, false)) return;
   if (shouldAnswer(msg, text)) await agentReply(msg, text);
+}
+
+// ---------- CA: dijawab langsung, juga tanpa perintah /ca (27 Nov: "ca" tanpa tanda tanya tidak dibalas) ----------
+const caText = (ca) => ca ? `<b>$GHOST contract</b> (Robinhood Chain)\n<code>${ca}</code>\n\nPons: https://www.ponsfamily.com/launchpad/${ca.toLowerCase()}\nSame address on ghostkeyai.com` : 'The $GHOST contract is not published yet. When it is, this command, the pinned message and ghostkeyai.com show the same address.';
+export const CA_ASK = [
+  /^\s*(pls\s+|please\s+|yo\s+|hey\s+)?(drop\s+|send\s+|share\s+|post\s+|give\s+(me\s+)?)?(the\s+|ur\s+|your\s+)?(\$?ghost\s+)?(ca|c\.a\.?|contract(\s+address)?|token\s+address|ctr)\s*(nya|dong|pls|please|plz|bro|sir|fam|anyone|\?|!|\.)*\s*$/i,
+  /\b(what'?s|what\s+is|where'?s|where\s+is|whats|wheres|drop|send|share|need|got|give\s+me|post)\s+(the\s+|ur\s+|your\s+|a\s+)?(\$?ghost\s+)?(ca|contract(\s+address)?|token\s+address)\b/i,
+  /\b(ca|contract(\s+address)?)\s+(pls|please|plz|anyone|\?|for\s+\$?ghost)/i,
+  /\b(mana|minta|kasih|bagi|share)\s+(ca|contract)\b|\bca\s*(nya|dong|mana|nya\s+mana)\b/i,
+];
+const isCaAsk = (t) => !!t && t.length <= 120 && CA_ASK.some((re) => re.test(t));
+const caLast = new Map();               // chat → waktu terakhir CA dikirim (hindari banjir saat banyak yang tanya)
+async function caReply(msg) {
+  const now = Date.now();
+  if (now - (caLast.get(msg.chat.id) || 0) < 20_000) return true;
+  caLast.set(msg.chat.id, now);
+  await say(msg, caText(await officialCA()));
+  console.log('[ca] dijawab', nameOf(msg.from));
+  return true;
 }
 
 // ---------- request member: catat, nilai, hitung suara (status di STATE_DIRECTORY, bertahan sesudah restart) ----------
@@ -450,7 +471,8 @@ function shouldAnswer(msg, text) {
   if (me && (text.toLowerCase().includes('@' + me.username.toLowerCase()))) return true;
   if (msg.reply_to_message?.from?.id === me?.id) return true;
   if (msg.chat.type === 'private') return true;
-  return /\?\s*$|\?\s/.test(text) && RELEVANT.test(text);
+  const asks = /\?\s*$|\?\s/.test(text) || /^\s*(what|how|when|where|why|who|which|is|are|can|could|does|do|did|will|would|should|any|anyone|kapan|gimana|bagaimana|apa|apakah|berapa|kenapa|mana|bisa)\b/i.test(text);
+  return asks && RELEVANT.test(text);
 }
 // ---------- pemeriksa spam AI (lapis kedua) ----------
 // Pola regex hanya kenal kalimat yang sudah pernah dilihat. Pesan yang lolos pola dibaca model kecil (ZDR) bila
