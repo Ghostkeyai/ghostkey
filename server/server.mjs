@@ -8,7 +8,7 @@ import { q, schemaColumns } from './db.mjs';
 import { Router, sendJson, readJson, clientIp, rateLimit } from './http.mjs';
 import { makeNonce, verifySignIn, sessionCookie, accountFromSession, logout, normWallet,
   listApiKeys, createApiKey, revokeApiKey, updateApiKey, resolveBearer } from './auth.mjs';
-import { getCatalog, modelInfo, publicModel } from './openrouter.mjs';
+import { getCatalog, modelInfo, publicModel, upstreamOf } from './openrouter.mjs';
 import { freeLeft, apiClientId, holderClientId, quoteCredit, creditDeposit, pruneDaily } from './billing.mjs';
 import { runChatStream, runChatJson, cleanMessages, STORED, errText } from './chat.mjs';
 import { buildUpstream, redactForDisplay, STRIPPED, ZDR_LIST_URL, incomingNotSent, droppedFields, FORCED_PROVIDER } from './privacy.mjs';
@@ -78,14 +78,15 @@ r.post('/api/inspect', async (req) => {
   const messages = cleanMessages(b.messages);
   if (!messages) return [400, { error: 'bad_messages', message: 'Send messages like the OpenAI API: [{"role":"user","content":"..."}].' }];
   const maxTokens = Math.min(Math.max(64, Number(b.max_tokens || b.max_completion_tokens || b.maxTokens) || 4096), 32000);
-  const up = buildUpstream({ modelId: model.id, messages, maxTokens, stream: !!b.stream, extra: b });
+  const up = buildUpstream({ ...upstreamOf(model), messages, maxTokens, stream: !!b.stream, extra: b });
   return {
     wouldSend: redactForDisplay(up),
     stripped: STRIPPED,
     droppedFields: droppedFields(b),
     notSent: incomingNotSent(req),
-    forcedProvider: FORCED_PROVIDER,
+    forcedProvider: up.body.provider,
     zdrProviders: model.zdrProviders,
+    ...(model.confidential ? { confidential: model.confidential } : {}),
     zdrList: ZDR_LIST_URL,
     code: codeUrl('server/privacy.mjs'),
   };
@@ -319,7 +320,8 @@ r.post('/api/chat', async (req, res) => {
 r.get('/v1/models', async () => ({
   object: 'list',
   data: (await getCatalog()).list.map((m) => ({ id: m.id, object: 'model', created: m.created, owned_by: m.lab, context_length: m.context,
-    pricing: { prompt_per_million: m.in, completion_per_million: m.out }, zdr: true, zdr_providers: m.zdrProviders })),
+    pricing: { prompt_per_million: m.in, completion_per_million: m.out }, zdr: true, zdr_providers: m.zdrProviders,
+    ...(m.confidential ? { confidential: { tee: m.confidential.tee, provider: m.confidential.provider, attestation: m.confidential.report, verify: m.confidential.verify } } : {}) })),
 }));
 r.post('/v1/chat/completions', async (req, res) => {
   const auth = resolveBearer(req);

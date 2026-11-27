@@ -92,6 +92,10 @@
           <h2>Models</h2>
           <p>Model ids are the same as on OpenRouter, like <code class="inline">openai/gpt-4o-mini</code> or <code class="inline">anthropic/claude-sonnet-4</code>. We list only models with at least one Zero Data Retention provider.</p>
           <p>Prices are OpenRouter's prices, per 1 million tokens. <a class="link" href="/models#compare">Compare them with OpenRouter</a> from your browser.</p>
+          <h3 id="confidential">Confidential models</h3>
+          <p>A model id ending in <code class="inline">:confidential</code>, like <code class="inline">z-ai/glm-5.3-flash:confidential</code>, is routed only to NEAR AI, which runs these models inside hardware enclaves (Intel TDX on the CPU, NVIDIA confidential computing on the GPU). The request carries <code class="inline">provider.only: ["near-ai"]</code> with fallbacks off, so it fails instead of going to another provider. Zero retention is still forced.</p>
+          <p>We show the tag only while NEAR AI's public attestation report for that model can be fetched. We fetch it every 30 minutes with a fresh nonce. To check a model yourself, open its report on <a class="link" href="https://cloud.near.ai/verify?model=z-ai%2Fglm-5.3-flash" target="_blank" rel="noopener">NEAR AI's verifier</a>. To check a single answer, press Check on its receipt: OpenRouter's own record names the provider that served it.</p>
+          <p>The enclave protects the model side. Your words still pass through our server on the way, as with every model, and we still do not store them.</p>
         </section>
 
         <section id="billing">

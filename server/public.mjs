@@ -99,6 +99,7 @@ export async function proofData() {
     code: {
       repo: config.links.github || null,
       privacy: codeUrl('server/privacy.mjs'),
+      confidential: codeUrl('server/confidential.mjs'),
       schema: codeUrl('server/db.mjs'),
       credit: codeUrl('server/credit.mjs'),
       harvester: codeUrl('server/harvester.mjs'),

@@ -19,7 +19,7 @@ let filter = 'Free';
 
 // Model bawaan: utamakan model hemat yang bisa memakai pesan gratis
 const PREFERRED = [/^deepseek\/deepseek-.*(flash|chat)/, /^google\/gemini-.*flash(?!.*lite)/, /^openai\/gpt-.*mini/, /^meta-llama\/llama/, /^qwen\/qwen3/, /^mistralai\//];
-const LAB_CHIPS = ['Free', 'OpenAI', 'Anthropic', 'Google', 'xAI', 'DeepSeek', 'Qwen', 'Meta', 'Mistral', 'All'];
+const LAB_CHIPS = ['Free', 'Confidential', 'OpenAI', 'Anthropic', 'Google', 'xAI', 'DeepSeek', 'Qwen', 'Meta', 'Mistral', 'All'];
 const SUGGEST = [
   'Explain zero data retention in two sentences.',
   'Write a polite email asking for a deadline extension.',
@@ -169,11 +169,16 @@ function setModel(m) {
   model = m;
   $('#m-name').textContent = m.name;
   $('#m-rate').textContent = `${rate(m.in)} in · ${rate(m.out)} out /1M`;
+  // Model Confidential: tautan ke laporan atestasi enclave penyedia (bisa dicek tanpa akun)
+  const cf = $('#m-conf');
+  if (cf) { cf.hidden = !m.confidential; if (m.confidential) { cf.href = m.confidential.verify; cf.title = `Runs inside a hardware enclave (${m.confidential.tee}) at ${m.confidential.provider}. Open its attestation.`; } }
   try { localStorage.setItem(KEY_MODEL, m.id); } catch {}
   if (attached) renderAtt();
 }
 
 function defaultModel() {
+  const want = new URLSearchParams(location.search).get('model');
+  if (want && byId.get(want)) return byId.get(want);
   let saved = null; try { saved = localStorage.getItem(KEY_MODEL); } catch {}
   if (saved && byId.get(saved)) return byId.get(saved);
   for (const re of PREFERRED) { const m = MODELS.find((x) => x.freeEligible && re.test(x.id)); if (m) return m; }
@@ -187,13 +192,13 @@ function renderPicker() {
     const terms = q.split(/\s+/);
     list = MODELS.filter((m) => terms.every((t) => m._hay.includes(t)));
   } else {
-    list = MODELS.filter((m) => (filter === 'All' ? true : filter === 'Free' ? m.freeEligible : m._lab === filter));
+    list = MODELS.filter((m) => (filter === 'All' ? true : filter === 'Free' ? m.freeEligible : filter === 'Confidential' ? !!m.confidential : m._lab === filter));
   }
   const shown = list.slice(0, 300);
   $('#m-list').innerHTML = shown.length ? shown.map((m) => {
     const prov = m.zdrProviders?.length ? `${m.zdrProviders.length} ZDR provider${m.zdrProviders.length === 1 ? '' : 's'}` : 'ZDR';
     return `<button class="mrow${m.id === model?.id ? ' sel' : ''}" data-id="${esc(m.id)}" type="button">
-      <span class="n">${esc(m.name)}<span class="tag zdr" title="${esc((m.zdrProviders || []).join(', '))}">${prov}</span>${m.freeEligible ? '<span class="tag gold" title="Works with free messages">Free OK</span>' : ''}</span>
+      <span class="n">${esc(m.name)}<span class="tag zdr" title="${esc((m.zdrProviders || []).join(', '))}">${prov}</span>${m.confidential ? `<span class="tag solid" title="Runs inside a hardware enclave (${esc(m.confidential.tee)}) at ${esc(m.confidential.provider)}">Confidential</span>` : ''}${m.freeEligible ? '<span class="tag gold" title="Works with free messages">Free OK</span>' : ''}</span>
       <span class="p">${rate(m.in)} / ${rate(m.out)}<small>in / out per 1M</small></span>
       <span class="id">${esc(m.id)} · ${compact(m.context)} context</span>
     </button>`;
@@ -201,7 +206,7 @@ function renderPicker() {
     : `<div class="empty" style="margin:16px">${pix('ghost', 36)}No model matches “${esc(q)}”.</div>`;
 }
 function renderLabChips() {
-  const count = (c) => (c === 'All' ? MODELS.length : c === 'Free' ? MODELS.filter((m) => m.freeEligible).length : MODELS.filter((m) => m._lab === c).length);
+  const count = (c) => (c === 'All' ? MODELS.length : c === 'Free' ? MODELS.filter((m) => m.freeEligible).length : c === 'Confidential' ? MODELS.filter((m) => m.confidential).length : MODELS.filter((m) => m._lab === c).length);
   $('#m-labs').innerHTML = LAB_CHIPS.filter((c) => count(c) > 0).map((c) => `<button type="button" data-lab="${c}" aria-pressed="${filter === c}">${c === 'Free' ? 'Free OK' : c}<span class="n">${count(c)}</span></button>`).join('');
 }
 let pickFor = null;          // null = model chat · fungsi = pilih model untuk editor persona
@@ -789,7 +794,7 @@ async function loadModels(req) {
     $('#m-name').textContent = 'Models unavailable';
     $('#thread').insertAdjacentHTML('afterbegin', `<div class="notice bad">Could not load the model list (${esc(e.message)}). The GHOSTKEY server may be offline. Try again in a minute.</div>`);
   }
-  for (const m of MODELS) { m._lab = labOf(m); m._hay = `${m.name} ${m.id} ${m._lab}`.toLowerCase(); }
+  for (const m of MODELS) { m._lab = labOf(m); m._hay = `${m.name} ${m.id} ${m._lab}${m.confidential ? ' confidential tee enclave' : ''}`.toLowerCase(); }
   byId = new Map(MODELS.map((m) => [m.id, m]));
   if (MODELS.length) { setModel(defaultModel()); $('#m-search').placeholder = `Search ${int(MODELS.length)} models: gpt, claude, llama…`; }
   renderConvs();

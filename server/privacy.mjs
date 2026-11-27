@@ -41,8 +41,9 @@ export function droppedFields(body = {}) {
  *   { url, headers, body }
  * - extra disaring lagi di sini (pertahanan berlapis): hanya ALLOWED_EXTRA yang lolos.
  * - reasoningOff: opsi SERVER (bukan dari klien) untuk pesan gratis — mematikan "thinking" tersembunyi.
+ * - only: opsi SERVER dari katalog (varian Confidential) — satu penyedia saja, tanpa fallback. ZDR tetap dipaksa.
  */
-export function buildUpstream({ modelId, messages, maxTokens, stream = false, extra = {}, reasoningOff = false }) {
+export function buildUpstream({ modelId, messages, maxTokens, stream = false, extra = {}, reasoningOff = false, only = null }) {
   const body = {
     ...pickAllowed(extra),
     model: modelId,
@@ -50,7 +51,7 @@ export function buildUpstream({ modelId, messages, maxTokens, stream = false, ex
     stream: !!stream,
     max_tokens: maxTokens,
     usage: { include: true },
-    provider: { ...FORCED_PROVIDER },
+    provider: { ...FORCED_PROVIDER, ...(only ? { only: [only], allow_fallbacks: false } : {}) },
   };
   if (reasoningOff) body.reasoning = { enabled: false };
   return {

@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { config } from './config.mjs';
 import { kvGet, kvSet } from './db.mjs';
 import { buildUpstream, ZDR_LIST_URL } from './privacy.mjs';
+import { CONF_MODELS, CONF_PROVIDER, CONF_SUFFIX, attestation, confInfo, refreshAttestations } from './confidential.mjs';
 
 const BASE = 'https://openrouter.ai/api/v1';
 const CATALOG_TTL = 10 * 60_000;     // 10 menit (harga OpenRouter bisa berubah dalam sejam; 26 Nov: 242/243 karena salinan per jam)
@@ -20,7 +21,7 @@ const LABS = {
 const perM = (perTok) => +(Number(perTok || 0) * 1e6).toFixed(4);   // USD per 1 juta token
 
 // Gabungkan daftar model + daftar endpoint ZDR → hanya model teks berbayar yang punya ≥1 endpoint ZDR.
-export function mergeCatalog(models, zdrEndpoints) {
+export function mergeCatalog(models, zdrEndpoints, attested = (id) => attestation(id)?.ok) {
   const zdrBy = new Map();
   for (const e of zdrEndpoints || []) {
     if (!e?.model_id) continue;
@@ -53,6 +54,23 @@ export function mergeCatalog(models, zdrEndpoints) {
       zdrMaxIn, zdrMaxOut,
       created: m.created || 0,
     });
+    // Varian Confidential: rute dikunci ke penyedia TEE (tanpa fallback), hanya selama atestasinya terbukti
+    const ce = CONF_MODELS[m.id] && attested(m.id) && eps.find((e) => e.provider_name === CONF_PROVIDER.name);
+    if (ce) {
+      const ci = perM(ce.pricing?.prompt), co = perM(ce.pricing?.completion);
+      if (co > 0) list.push({
+        ...list.at(-1),
+        id: m.id + CONF_SUFFIX, upstreamId: m.id, only: CONF_PROVIDER.slug,
+        name: `${list.at(-1).name} (Confidential)`,
+        in: ci, out: co, zdrMaxIn: ci, zdrMaxOut: co,
+        freeEligible: co <= config.freeMaxOutPerM,
+        vision: false,                                  // rute TEE: teks saja (gambar tidak dijamin didukung)
+        tools: (ce.supported_parameters || []).includes('tools'),
+        zdrProviders: [CONF_PROVIDER.name],
+        context: ce.context_length || list.at(-1).context,
+        confidential: confInfo(m.id),
+      });
+    }
   }
   list.sort((a, b) => b.created - a.created);
   return list;
@@ -62,7 +80,11 @@ export function mergeCatalog(models, zdrEndpoints) {
 export const publicModel = (m) => ({
   id: m.id, name: m.name, lab: m.lab, context: m.context, in: m.in, out: m.out, vision: m.vision, tools: m.tools,
   freeEligible: m.freeEligible, zdr: m.zdr, zdrProviders: m.zdrProviders, zdrMaxIn: m.zdrMaxIn, zdrMaxOut: m.zdrMaxOut,
+  ...(m.confidential ? { confidential: m.confidential, baseId: m.upstreamId } : {}),
 });
+
+// Model & rute yang dikirim ke OpenRouter untuk satu entri katalog (varian Confidential → id asli + provider.only)
+export const upstreamOf = (m) => ({ modelId: m.upstreamId || m.id, only: m.only || null });
 
 const setCatalog = (list, at, source) => { catalog = { at, list, byId: new Map(list.map((m) => [m.id, m])), source }; return catalog; };
 
@@ -74,7 +96,7 @@ async function fetchJson(url) {
 
 async function refresh() {
   try {
-    const [m, z] = await Promise.all([fetchJson(`${BASE}/models`), fetchJson(ZDR_LIST_URL)]);
+    const [m, z] = await Promise.all([fetchJson(`${BASE}/models`), fetchJson(ZDR_LIST_URL), refreshAttestations().catch(() => null)]);
     const list = mergeCatalog(m.data, z.data);
     if (!list.length) throw new Error('empty ZDR catalog');
     kvSet('catalog', { at: Date.now(), list });
@@ -126,7 +148,7 @@ export function billedCost(model, tokensIn, tokensOut, upstream) {
  * → { tokensIn, tokensOut, costUsd, text, finish, upstream (permintaan yang dikirim) }
  */
 export async function streamChat({ model, messages, maxTokens, onDelta, signal, extra = {}, reasoningOff = false }) {
-  const up = buildUpstream({ modelId: model.id, messages, maxTokens, stream: true, extra, reasoningOff });
+  const up = buildUpstream({ ...upstreamOf(model), messages, maxTokens, stream: true, extra, reasoningOff });
   const bodyStr = JSON.stringify(up.body);
   const forwardedSha256 = sha256(bodyStr);
   if (!config.openrouterKey) return { ...(await mockStream({ model, messages, maxTokens, onDelta })), upstream: up, genId: null, forwardedSha256 };
@@ -172,7 +194,7 @@ export async function streamChat({ model, messages, maxTokens, onDelta, signal, 
  * → { json, tokensIn, tokensOut, costUsd, upstream }
  */
 export async function completeChat({ model, messages, maxTokens, extra = {}, signal }) {
-  const up = buildUpstream({ modelId: model.id, messages, maxTokens, stream: false, extra });
+  const up = buildUpstream({ ...upstreamOf(model), messages, maxTokens, stream: false, extra });
   const bodyStr = JSON.stringify(up.body);
   const forwardedSha256 = sha256(bodyStr);
   if (!config.openrouterKey) {

@@ -1,5 +1,13 @@
 [
   {
+    "id": "2026-11-27-confidential",
+    "date": "2026-11-27",
+    "title": "Confidential models, with their attestation",
+    "what": "Three models now come in a Confidential version: GLM 5.3 Flash, Qwen3.8 27B and DeepSeek V4.1 Flash. They run at NEAR AI inside hardware enclaves (Intel TDX and NVIDIA confidential computing), and the request is locked to that provider with no fallback. Each one links to NEAR AI's public attestation report, which we re-fetch every 30 minutes, and the tag disappears if the report stops coming back. The receipt under each answer still checks against OpenRouter's record, which names the provider.",
+    "link": "https://ghostkeyai.com/models?conf=1",
+    "cta": "See Confidential models"
+  },
+  {
     "id": "2026-11-27-pdf-chat",
     "date": "2026-11-27",
     "title": "Chat with your PDFs, privately",

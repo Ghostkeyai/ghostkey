@@ -147,6 +147,12 @@ code.inline { font: 13px var(--font-mono); background: #ffffff0d; border: 1px so
 .tag.zdr, .tag.ok { color: var(--mint); border-color: #9ff0c855; }
 .tag.solid { background: var(--mint); color: #0d1411; border-color: var(--mint); }
 .tag.gold { color: var(--gold); border-color: #ffd27a55; }
+a.tag { text-decoration: none; }
+.conf-link { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px; border: 1px dashed #9ff0c866; color: var(--mint); font: 400 11px/1 var(--font-pixel); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; text-decoration: none; flex: none; }
+.conf-link:hover { border-style: solid; background: #9ff0c812; }
+.conf-link[hidden] { display: none; }
+.conf-link .cd { width: 6px; height: 6px; background: var(--mint); box-shadow: 0 0 8px #9ff0c8aa; }
+@media (max-width: 900px) { .conf-link .long { display: none; } }
 .tag.bad { color: var(--bad); border-color: #ff8a7a55; }
 .empty { padding: 32px 20px; border: 1px dashed var(--line-2); color: var(--dim); text-align: center; font-size: 14.5px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .empty .pix { color: var(--faint); }

@@ -6,7 +6,7 @@ const $ = (s, el = document) => el.querySelector(s);
 const PAGE = 50;
 
 let all = [];
-const state = { q: '', lab: '', free: false, vision: false, tools: false, sort: 'in' };
+const state = { q: '', lab: '', free: false, conf: false, vision: false, tools: false, sort: 'in' };
 let limit = PAGE;
 let checked = null;          // hasil pembanding: Map id → { price:'match'|'differs'|'missing', oi, oo, zdr:boolean|null }
 
@@ -14,14 +14,14 @@ function readUrl() {
   const p = new URLSearchParams(location.search);
   state.q = p.get('q') || '';
   state.lab = p.get('lab') || '';
-  for (const f of ['free', 'vision', 'tools']) state[f] = p.get(f) === '1';
+  for (const f of ['free', 'conf', 'vision', 'tools']) state[f] = p.get(f) === '1';
   state.sort = p.get('sort') || 'in';
 }
 function writeUrl() {
   const p = new URLSearchParams();
   if (state.q) p.set('q', state.q);
   if (state.lab) p.set('lab', state.lab);
-  for (const f of ['free', 'vision', 'tools']) if (state[f]) p.set(f, '1');
+  for (const f of ['free', 'conf', 'vision', 'tools']) if (state[f]) p.set(f, '1');
   if (state.sort !== 'in') p.set('sort', state.sort);
   const qs = p.toString();
   history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
@@ -32,6 +32,7 @@ function filtered() {
   const list = all.filter((m) => {
     if (state.lab && m._lab !== state.lab) return false;
     if (state.free && !m.freeEligible) return false;
+    if (state.conf && !m.confidential) return false;
     if (state.vision && !m.vision) return false;
     if (state.tools && !m.tools) return false;
     return terms.every((t) => m._hay.includes(t));
@@ -71,7 +72,7 @@ function render() {
   const rows = list.slice(0, limit);
   const tb = $('#rows');
   tb.innerHTML = list.length ? rows.map((m) => {
-    const tags = `${m.freeEligible ? '<span class="tag gold" title="Works with free messages">Free OK</span>' : ''}${m.vision ? '<span class="tag">Vision</span>' : ''}${m.tools ? '<span class="tag">Tools</span>' : ''}`;
+    const tags = `${m.confidential ? `<a class="tag solid" href="${esc(m.confidential.verify)}" target="_blank" rel="noopener" title="Runs inside a hardware enclave (${esc(m.confidential.tee)}) at ${esc(m.confidential.provider)}. Open its attestation.">Confidential ↗</a>` : ''}${m.freeEligible ? '<span class="tag gold" title="Works with free messages">Free OK</span>' : ''}${m.vision ? '<span class="tag">Vision</span>' : ''}${m.tools ? '<span class="tag">Tools</span>' : ''}`;
     const c = checked?.get(m.id);
     return `<tr${c && c.price === 'differs' ? ' class="diff"' : ''}>
       <td class="c-model"><div class="mn">${esc(m.name)}</div><span class="sub">${esc(m.id)}</span>${tags ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${tags}</div>` : ''}</td>
@@ -158,13 +159,16 @@ async function compare() {
   btn.textContent = 'Compare again';
 
   checked = new Map(all.map((m) => [m.id, { price: 'missing', zdr: null }]));
+  const zEps = zdrRes.status === 'fulfilled' ? zdrRes.value : [];
+  const confEndpoint = (m) => zEps.find((e) => e.model_id === m.baseId && e.provider_name === m.confidential.provider) || null;
   // Harga
   if (orRes.status === 'fulfilled') {
     const byId = new Map(orRes.value.map((m) => [m.id, m]));
     let match = 0, differs = 0, missing = 0;
     for (const m of all) {
-      const o = byId.get(m.id);
       const c = checked.get(m.id);
+      // Varian Confidential: harganya = baris penyedia itu sendiri di daftar ZDR publik OpenRouter
+      const o = m.confidential ? confEndpoint(m) : byId.get(m.id);
       if (!o) { missing++; continue; }
       c.oi = perM(o.pricing?.prompt); c.oo = perM(o.pricing?.completion);
       if (c.oi === r4(m.in) && c.oo === r4(m.out)) { c.price = 'match'; match++; } else { c.price = 'differs'; differs++; }
@@ -175,7 +179,7 @@ async function compare() {
       <dl class="kv" style="margin-top:14px">
         <div><dt>Downloaded from openrouter.ai</dt><dd>${int(orRes.value.length)} models · ${ms} ms</dd></div>
         ${missing ? `<div><dt>Not on OpenRouter's list right now</dt><dd>${int(missing)}<small>our copy refreshes every 10 minutes</small></dd></div>` : ''}
-        <div><dt>Method</dt><dd>price per token × 1,000,000<small>rounded to 4 decimals on both sides</small></dd></div>
+        <div><dt>Method</dt><dd>price per token × 1,000,000<small>rounded to 4 decimals on both sides · Confidential routes use their provider's own line on the ZDR list</small></dd></div>
       </dl>
       ${differs ? '<p class="hint" style="margin-top:10px">A difference usually means OpenRouter changed a price in the last 10 minutes. You are always billed the exact cost OpenRouter reports for your request. Rows that differ are marked in the table.</p>' : ''}`;
   } else {
@@ -191,9 +195,9 @@ async function compare() {
     }
     let ok = 0, extra = 0;
     for (const m of all) {
-      const set = zmap.get(m.id);
+      const set = zmap.get(m.baseId || m.id);
       const c = checked.get(m.id);
-      c.zdr = !!set?.size;
+      c.zdr = m.confidential ? !!set?.has(m.confidential.provider) : !!set?.size;
       if (c.zdr) ok++;
       if (set && (m.zdrProviders || []).some((p) => !set.has(p))) extra++;
     }
