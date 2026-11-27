@@ -479,7 +479,7 @@ function openDrawer(r) {
     <div class="forced">
       <div class="label" style="margin-bottom:8px">Forced on every request</div>
       ${prov ? `<code>"provider": ${esc(JSON.stringify(prov))}</code>` : '<code>"provider": {"zdr": true, "data_collection": "deny"}</code>'}
-      <p style="margin-top:8px;color:var(--dim)"><b style="color:var(--ink);font-weight:500">zdr: true</b> means OpenRouter may only use providers with Zero Data Retention: they keep nothing after answering. <b style="color:var(--ink);font-weight:500">data_collection: "deny"</b> blocks providers that train on prompts.</p>
+      <p style="margin-top:8px;color:var(--dim)"><b style="color:var(--ink);font-weight:500">zdr: true</b> means OpenRouter may only use providers with Zero Data Retention: they keep nothing after answering. <b style="color:var(--ink);font-weight:500">data_collection: "deny"</b> blocks providers that train on prompts.</p>${prov?.only ? `<p style="margin-top:8px;color:var(--dim)"><b style="color:var(--ink);font-weight:500">only: ${esc(JSON.stringify(prov.only))}</b> with <b style="color:var(--ink);font-weight:500">allow_fallbacks: false</b> means this Confidential model may only be served by that provider, inside its hardware enclave. If it is down, the request fails instead of going elsewhere. <a class="link" href="${esc(byId.get(r.model)?.confidential?.verify || '/docs#confidential')}" target="_blank" rel="noopener">Check its attestation</a></p>` : ''}
       <p style="margin-top:8px"><a class="proof-link" href="${ZDR_LIST}" target="_blank" rel="noopener">Check OpenRouter's public ZDR list</a></p>
     </div>
     <div>
