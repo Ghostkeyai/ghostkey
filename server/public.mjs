@@ -1,6 +1,7 @@
 // Data publik yang dipakai API (/api/config, /api/stats, /api/proof) dan halaman /proof.
 // Semua angka dari DB; alamat yang belum diisi = null (tidak pernah alamat palsu).
-import { config, microToUsd, codeUrl } from './config.mjs';
+import { config, microToUsd, codeUrl, ROOT } from './config.mjs';
+import { buildInfo, buildSummary } from './build.mjs';
 import { q } from './db.mjs';
 import { creditStats, ledgerList } from './credit.mjs';
 import { recentHarvests } from './harvester.mjs';
@@ -109,7 +110,9 @@ export async function proofData() {
       comparePrices: codeUrl('tools/verify/compare-prices.mjs'),
       feeRecipient: codeUrl('tools/verify/fee-recipient.mjs'),
       contract: codeUrl('contracts/src/GhostLedger.sol'),
+      checkBuild: codeUrl('tools/verify/check-build.mjs'),
     },
+    build: buildSummary(buildInfo(ROOT, config.links.github)),
     latestHours: ledgerList(12).map((h) => ({ ...h, txUrl: h.txHash ? txUrl(h.txHash) : null })),
     harvests: recentHarvests(10).map((h) => ({ ...h, txs: h.txs.map((x) => ({ ...x, url: x.txHash ? txUrl(x.txHash) : null })) })),
     stats: statsData(),

@@ -1,5 +1,13 @@
 [
   {
+    "id": "2026-11-29-build-hash",
+    "date": "2026-11-29",
+    "title": "Check the live server against the public repo",
+    "what": "When the server starts, it now hashes every file it runs and serves and publishes the list with the commit it was deployed from. The Proof page shows the commit and one tree hash. Check out that commit and the same hash comes out of one shell command, or run check-build.mjs to see any file that differs. Deploys only go out from code that is committed and pushed.",
+    "link": "https://ghostkeyai.com/proof#build",
+    "cta": "See the running build"
+  },
+  {
     "id": "2026-11-28-web-search",
     "date": "2026-11-28",
     "title": "Web search, off by default",

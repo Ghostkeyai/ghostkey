@@ -16,6 +16,9 @@ import { ledgerList, ledgerHour, ledgerHourRaw, holderCredits, startCreditSchedu
 import { startHarvester, harvesterReady } from './harvester.mjs';
 import { configData, statsData, proofData } from './public.mjs';
 import { codeUrl } from './config.mjs';
+import { buildInfo } from './build.mjs';
+// sidik jari kode dihitung sekali saat menyala, sebelum menerima permintaan
+const BUILD = buildInfo(ROOT, config.links.github);
 
 const r = new Router();
 const needAuth = (req, res) => {
@@ -68,6 +71,7 @@ r.get('/api/receipt/:id', async (req, res, p) => {
 // Changelog fitur (server/changelog.json, terbaru di atas) — dipakai halaman roadmap & bot grup untuk pengumuman "Shipped"
 r.get('/api/changelog', async () => { try { return JSON.parse(await readFile(join(ROOT, 'server', 'changelog.json'), 'utf8')); } catch { return []; } });
 r.get('/api/proof', async () => proofData());
+r.get('/api/build', async () => BUILD);
 
 // Inspector publik: tunjukkan persis badan yang AKAN dikirim ke OpenRouter. Tanpa login, gratis, tidak memanggil model.
 r.post('/api/inspect', async (req) => {
@@ -488,7 +492,7 @@ async function serveStatic(req, res, path, status = 200) {
 }
 
 // CORS: rute publik tanpa cookie boleh dipanggil dari situs lain (verifikasi, klien API)
-const PUBLIC_CORS = /^\/(v1\/|api\/(models|stats|proof|ledger|holder|inspect|config)(\/|$))/;
+const PUBLIC_CORS = /^\/(v1\/|api\/(models|stats|proof|build|ledger|holder|inspect|config)(\/|$))/;
 
 // ---------- Server ----------
 export const server = http.createServer(async (req, res) => {

@@ -34,6 +34,7 @@ export async function renderProof() {
   const c = d.code;
   const gh = (url, text) => (url ? ext(url, text) : `<span class="dim">${text} (source link added at launch)</span>`);
   const L = d.contracts.ledger, T = d.contracts.token, W = d.wallets;
+  const B = d.build;
 
   // --- Tabel klaim → cara cek ---
   const rows = [
@@ -59,6 +60,10 @@ export async function renderProof() {
     ['Personas are saved in your browser, not in our database.',
       'A persona (name, model, instructions) is kept in your browser under <code>localStorage.gk_personas</code>. When a chat uses it, the instructions travel to the model as the first message of each request, through our server like any prompt, and are not stored. The inspector and the "What we sent" drawer show that message. No table below has a column for it.',
       [ext('/app', 'Make one in the chat'), ext('/privacy', 'Inspector'), gh(c.schema, 'db.mjs schema')]],
+    ['The live server runs the code in the public repo.',
+      'When the server starts, it hashes every file it runs and serves (<code>server/</code>, <code>web/</code>, <code>package.json</code>, <code>package-lock.json</code>) and publishes the list with the commit it was deployed from. Check out that commit and compute the same hash with one command, or run the script, which names any file that differs.',
+      [ext('/api/build', 'File hashes (/api/build)'), B.commitUrl ? ext(B.commitUrl, `Commit ${B.commit.slice(0, 7)}`) : '',
+        '<a class="proof-link" href="#build">Running build below</a>', gh(c.checkBuild, 'Script: check-build.mjs')]],
     [`${pct(d.split.holderShareBps)} of $GHOST fees become Ghost Credit, every hour.`,
       'Each hour we publish who got what as JSON, and post its Merkle root to the GhostLedger contract. Anyone can recompute it.',
       [L ? ext(L.url, 'GhostLedger on Blockscout') : '<span class="dim">GhostLedger: not deployed yet</span>',
@@ -116,6 +121,21 @@ export async function renderProof() {
   const schemaHtml = `<div class="pf-schema">${Object.entries(schema).map(([t, cols]) =>
     `<div class="card"><p class="kicker">${esc(t)}</p><p class="mono cols">${cols.map(esc).join(', ')}</p></div>`).join('')}</div>`;
 
+  // --- Build yang sedang berjalan ---
+  const buildHtml = `<div class="card pf-build">
+    <dl>
+      <dt>Commit</dt><dd class="mono">${B.commit ? (B.commitUrl ? ext(B.commitUrl, esc(B.commit)) : esc(B.commit)) : '<span class="dim">not reported</span>'}</dd>
+      <dt>Tree hash</dt><dd class="mono">${esc(B.treeHash)}</dd>
+      <dt>Files</dt><dd>${int(B.fileCount)} in ${B.scope.map((x) => `<code>${esc(x)}</code>`).join(', ')}</dd>
+      <dt>Server started</dt><dd>${new Date(B.startedAt).toISOString().slice(0, 16).replace('T', ' ')} UTC</dd>
+    </dl>
+    <p class="note">Same tree hash from the public repo, no script needed:</p>
+    <pre class="pf-cmd">git clone ${esc(d.code.repo || 'https://github.com/Ghostkeyai/ghostkey')}.git &amp;&amp; cd ghostkey
+git checkout ${B.commit ? esc(B.commit) : '&lt;commit&gt;'}
+${esc(B.recompute)}</pre>
+    <p class="links">${ext('/api/build', 'Every file and its hash (/api/build)')}${gh(c.checkBuild, 'check-build.mjs: lists any file that differs')}</p>
+  </div>`;
+
   const stat = (k, v) => `<div class="card pf-stat"><p class="kicker">${k}</p><p class="v px">${v}</p></div>`;
   const stats = `<div class="pf-stats">
     ${stat('Messages', int(s.messages))}${stat('Tokens served', int(s.tokensServed))}${stat('Billed at OpenRouter price', usd(s.billedUsd))}
@@ -127,6 +147,7 @@ export async function renderProof() {
     'Zero Data Retention is the provider\'s policy, listed publicly by OpenRouter. OpenRouter screens for illegal content as the law requires.',
     'Your balance is held by GHOSTKEY\'s server as prepaid credit. It is not a token in your wallet.',
     'We keep your wallet address because top-ups and Ghost Credit need it.',
+    'The build hashes are reported by the server itself. They let anyone compare the running code with the public repo, file by file. They are not a hardware attestation like the one behind Confidential models.',
     'Ghost Credit is platform credit for AI, not money. It depends on how much $GHOST is traded. Nothing here promises a price or profit.',
   ];
 
@@ -175,6 +196,13 @@ export async function renderProof() {
   .pf-schema .card { padding: 14px; }
   .pf-schema .cols { margin-top: 8px; font-size: 12px; color: var(--dim); word-break: break-word; }
   .pf-empty { padding: 18px; color: var(--dim); }
+  .pf-build { padding: 18px; display: grid; gap: 14px; }
+  .pf-build dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; font-size: 14px; }
+  .pf-build dt { color: var(--faint); }
+  .pf-build dd { color: var(--ink); overflow-wrap: anywhere; }
+  .pf-build .note { color: var(--dim); font-size: 14px; }
+  .pf-cmd { margin: 0; padding: 14px; background: var(--bg); border: 1px solid var(--line); font: 400 12.5px/1.6 var(--font-mono); color: var(--mint); white-space: pre-wrap; overflow-wrap: anywhere; }
+  @media (max-width: 640px) { .pf-build dl { grid-template-columns: 1fr; } .pf-build dt { margin-top: 6px; } }
   .pf-limits { display: grid; gap: 10px; list-style: none; }
   .pf-limits li { padding: 14px 18px; background: var(--bg-2); border: 1px solid var(--line); color: var(--dim); }
   .pf-foot { margin-top: 56px; color: var(--faint); font-size: 13px; }
@@ -220,6 +248,12 @@ export async function renderProof() {
     <p class="kicker">Fees</p><h2 class="h3" id="harvest-h">Latest fee claims</h2>
     <p class="lead">Each claim and the two transfers that split it.</p>
     ${harvests}
+  </section>
+
+  <section class="pf-sec" id="build" aria-labelledby="build-h">
+    <p class="kicker">Running code</p><h2 class="h3" id="build-h">The build this server is running</h2>
+    <p class="lead">Hashed by the server when it started. Compare it with the public repo.</p>
+    ${buildHtml}
   </section>
 
   <section class="pf-sec" id="stats" aria-labelledby="stats-h">
