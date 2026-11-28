@@ -22,15 +22,33 @@ export const ALLOWED_EXTRA = ['temperature', 'top_p', 'stop', 'tools', 'tool_cho
 // Kebijakan penyedia yang selalu dipaksa (tidak bisa ditimpa klien)
 export const FORCED_PROVIDER = Object.freeze({ zdr: true, data_collection: 'deny' });
 
+// Pencarian web: HANYA lewat opsi server ini (bukan `plugins` atau server tool dari klien), mati bawaan.
+// Mesin dikunci ke Exa (bukan "native" penyedia model) supaya tarif & penerima kueri selalu sama dan bisa ditulis jujur.
+// ZDR tetap dipaksa untuk model; kueri pencarian sendiri dijalankan Exa di bawah kebijakan Exa (bukan ZDR).
+export const WEB_PLUGIN = Object.freeze({ id: 'web', engine: 'exa', max_results: 5 });
+export const WEB_SEARCH = Object.freeze({
+  engine: 'Exa', via: 'OpenRouter web plugin', maxResults: WEB_PLUGIN.max_results,
+  feeUsd: 0.007,              // tarif Exa "auto" di OpenRouter per pencarian (≤10 hasil), ikut masuk usage.cost
+  extraTokens: 8000,          // cadangan token untuk cuplikan hasil yang disisipkan ke prompt (±2.4k terukur di uji)
+  docs: 'https://openrouter.ai/docs/guides/features/web-search',
+  policy: 'https://exa.ai/privacy-policy',
+});
+
 // Ambil hanya parameter yang diizinkan dari badan klien.
+// `tools` hanya boleh berisi fungsi biasa: server tool OpenRouter (mis. "openrouter:web_search") dibuang,
+// supaya pencarian web tidak bisa nyala diam-diam di luar sakelar di atas.
 export function pickAllowed(body = {}) {
   const o = {};
   for (const k of ALLOWED_EXTRA) if (body[k] !== undefined) o[k] = body[k];
+  if (Array.isArray(o.tools)) {
+    o.tools = o.tools.filter((t) => t && (t.type === undefined || t.type === 'function'));
+    if (!o.tools.length) { delete o.tools; delete o.tool_choice; }
+  }
   return o;
 }
 
 // Kolom badan klien yang dibuang (untuk ditampilkan apa adanya)
-const KNOWN = new Set(['model', 'messages', 'stream', 'max_tokens', 'max_completion_tokens', ...ALLOWED_EXTRA]);
+const KNOWN = new Set(['model', 'messages', 'stream', 'max_tokens', 'max_completion_tokens', 'web_search', ...ALLOWED_EXTRA]);
 export function droppedFields(body = {}) {
   return Object.keys(body || {}).filter((k) => !KNOWN.has(k));
 }
@@ -42,8 +60,9 @@ export function droppedFields(body = {}) {
  * - extra disaring lagi di sini (pertahanan berlapis): hanya ALLOWED_EXTRA yang lolos.
  * - reasoningOff: opsi SERVER (bukan dari klien) untuk pesan gratis — mematikan "thinking" tersembunyi.
  * - only: opsi SERVER dari katalog (varian Confidential) — satu penyedia saja, tanpa fallback. ZDR tetap dipaksa.
+ * - web: opsi SERVER dari sakelar pengguna — menambah WEB_PLUGIN (Exa, 5 hasil). Tanpa sakelar: tidak ada `plugins` sama sekali.
  */
-export function buildUpstream({ modelId, messages, maxTokens, stream = false, extra = {}, reasoningOff = false, only = null }) {
+export function buildUpstream({ modelId, messages, maxTokens, stream = false, extra = {}, reasoningOff = false, only = null, web = false }) {
   const body = {
     ...pickAllowed(extra),
     model: modelId,
@@ -54,6 +73,7 @@ export function buildUpstream({ modelId, messages, maxTokens, stream = false, ex
     provider: { ...FORCED_PROVIDER, ...(only ? { only: [only], allow_fallbacks: false } : {}) },
   };
   if (reasoningOff) body.reasoning = { enabled: false };
+  if (web) body.plugins = [{ ...WEB_PLUGIN }];
   return {
     url: UPSTREAM_URL,
     headers: {

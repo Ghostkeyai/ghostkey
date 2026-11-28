@@ -96,7 +96,7 @@ try {
     fetch('https://openrouter.ai/api/v1/endpoints/zdr').then((x) => x.json()),
   ]);
   const zdrIds = new Set(zdrList.data.map((e) => e.model_id));
-  check('semua model ada di daftar ZDR publik OpenRouter', models.every((m) => zdrIds.has(m.id)));
+  check('semua model ada di daftar ZDR publik OpenRouter', models.every((m) => zdrIds.has(m.baseId || m.id)));
   const orBy = new Map(orModels.data.map((m) => [m.id, m]));
   const priceMismatch = models.filter((m) => {
     const o = orBy.get(m.id); if (!o) return false;
@@ -127,6 +127,16 @@ try {
     j.stripped.includes('ip_address') && j.zdrList === 'https://openrouter.ai/api/v1/endpoints/zdr' && j.code.endsWith('/server/privacy.mjs'));
   ({ r } = await post('/api/inspect', { model: 'no/such-model', messages: [{ role: 'user', content: 'x' }] }));
   check('inspect model tak dikenal → 400', r.status === 400);
+  // Pencarian web: hanya lewat web_search:true (Exa, 5 hasil); plugins / server tool dari klien dibuang
+  ({ j } = await post('/api/inspect', { model: cheap.id, messages: [{ role: 'user', content: 'x' }] }));
+  check('inspect: tanpa sakelar → tidak ada plugins', !('plugins' in j.wouldSend.body) && !j.webSearch);
+  ({ j } = await post('/api/inspect', { model: cheap.id, web_search: true, messages: [{ role: 'user', content: 'x' }],
+    plugins: [{ id: 'web', engine: 'native', max_results: 50 }], tools: [{ type: 'openrouter:web_search' }, { type: 'function', function: { name: 'f', parameters: {} } }] }));
+  check('inspect: web_search → plugin Exa 5 hasil, plugins klien dibuang', J(j.wouldSend.body.plugins) === J([{ id: 'web', engine: 'exa', max_results: 5 }]) &&
+    j.webSearch?.engine === 'Exa' && j.droppedFields.includes('plugins') && !j.droppedFields.includes('web_search'), J(j.wouldSend.body.plugins));
+  check('inspect: server tool klien dibuang, fungsi biasa tetap', j.wouldSend.body.tools?.length === 1 && j.wouldSend.body.tools[0].type === 'function');
+  ({ j } = await post('/api/inspect', { model: cheap.id, tools: [{ type: 'openrouter:web_search' }], tool_choice: 'auto', messages: [{ role: 'user', content: 'x' }] }));
+  check('inspect: hanya server tool → tools & tool_choice hilang', !('tools' in j.wouldSend.body) && !('tool_choice' in j.wouldSend.body));
 
   // ---------- Pesan gratis (web) ----------
   const clientId = 'test' + Math.random().toString(36).slice(2) + 'xxxxxxxxxxxxxxxx';
@@ -146,6 +156,8 @@ try {
   check('SSE: potongan → receipt → [DONE]', order.at(-1) === 'done' && order.at(-2) === 'receipt' && order[0] === 'chunk');
   s = await sse('/api/chat', { model: pricey.id, clientId, messages: [{ role: 'user', content: 'hello' }] });
   check('model mahal ditolak saat gratis', s.status === 402 && s.json.error === 'model_needs_balance');
+  s = await sse('/api/chat', { model: cheap.id, web: true, clientId: clientId + 'w', messages: [{ role: 'user', content: 'news' }] });
+  check('web search saat gratis → 402 web_balance', s.status === 402 && s.json.error === 'web_balance');
   for (let i = 0; i < 9; i++) await sse('/api/chat', { model: cheap.id, clientId, messages: [{ role: 'user', content: `n${i} ${MARKER}` }] });
   ({ j } = await get(`/api/free?clientId=${clientId}`));
   check('jatah gratis habis setelah 10', j.freeLeft === 0);
@@ -171,9 +183,14 @@ try {
   const { q } = await import('../server/db.mjs');
   q.run('UPDATE accounts SET balance_micro=5000000 WHERE wallet=?', w.address.toLowerCase());
   s = await sse('/api/chat', { model: pricey.id, clientId: clientId + 'b', messages: [{ role: 'user', content: `explain gravity ${MARKER}` }] }, { cookie });
-  check('chat berbayar jalan', s.status === 200 && s.receipt?.paidBy === 'balance' && s.receipt.costUsd > 0, `biaya=$${s.receipt?.costUsd} saldo=$${s.receipt?.balanceUsd}`);
+  check('chat berbayar jalan (tanpa web: tanpa plugins/web)', s.status === 200 && s.receipt?.paidBy === 'balance' && s.receipt.costUsd > 0 && !s.receipt.forwarded.body.plugins && !s.receipt.web, `biaya=$${s.receipt?.costUsd} saldo=$${s.receipt?.balanceUsd}`);
   check('saldo terpotong tepat', Math.abs(5 - s.receipt.costUsd - s.receipt.balanceUsd) < 1e-6 && s.receipt.freeLeft === null);
   check('tahanan dilepas', q.one('SELECT held_micro h FROM accounts WHERE wallet=?', w.address.toLowerCase()).h === 0);
+  // Pencarian web berbayar: plugin terkirim, struk berisi mesin + sumber; gratis ditolak
+  s = await sse('/api/chat', { model: pricey.id, web: true, clientId: clientId + 'b', messages: [{ role: 'user', content: 'news today' }] }, { cookie });
+  check('chat + web: plugin Exa terkirim, sumber di struk', s.status === 200 && J(s.receipt?.forwarded?.body?.plugins) === J([{ id: 'web', engine: 'exa', max_results: 5 }]) &&
+    s.receipt.web?.engine === 'Exa' && s.receipt.web.feeUsd === 0.007 && s.receipt.web.sources?.[0]?.url === 'https://example.com/mock-source', J(s.receipt?.web));
+  check('tahanan dilepas sesudah web', q.one('SELECT held_micro h FROM accounts WHERE wallet=?', w.address.toLowerCase()).h === 0);
 
   // ---------- Kunci API ----------
   ({ j } = await post('/api/me/apikey', {}, { cookie }));

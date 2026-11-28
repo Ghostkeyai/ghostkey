@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 // Badan & header permintaan hulu SELALU dibentuk oleh privacy.mjs buildUpstream().
 import { config } from './config.mjs';
 import { kvGet, kvSet } from './db.mjs';
-import { buildUpstream, ZDR_LIST_URL } from './privacy.mjs';
+import { buildUpstream, ZDR_LIST_URL, WEB_SEARCH } from './privacy.mjs';
 import { CONF_MODELS, CONF_PROVIDER, CONF_SUFFIX, attestation, confInfo, refreshAttestations } from './confidential.mjs';
 
 const BASE = 'https://openrouter.ai/api/v1';
@@ -123,13 +123,15 @@ export async function modelInfo(id) {
 
 // Perkiraan biaya maksimum (USD) sebelum memanggil — untuk menahan saldo (pakai harga ZDR termahal).
 const promptTokEstimate = (messages) => Math.ceil(JSON.stringify(messages).length / 3.2) + 50;
-export function estimateMaxUsd(model, messages, maxTokens) {
-  return (promptTokEstimate(messages) * model.zdrMaxIn + maxTokens * model.zdrMaxOut) / 1e6;
+// Pencarian web: tarif tetap Exa + cuplikan hasil yang ikut dihitung sebagai token masukan
+const webUsd = (model, web) => (web ? WEB_SEARCH.feeUsd + (WEB_SEARCH.extraTokens * model.zdrMaxIn) / 1e6 : 0);
+export function estimateMaxUsd(model, messages, maxTokens, web = false) {
+  return (promptTokEstimate(messages) * model.zdrMaxIn + maxTokens * model.zdrMaxOut) / 1e6 + webUsd(model, web);
 }
 
 // Token keluaran terbesar yang masih muat di saldo tersedia.
-export function fitMaxTokens(model, messages, availableUsd, wanted) {
-  const promptUsd = (promptTokEstimate(messages) * model.zdrMaxIn) / 1e6;
+export function fitMaxTokens(model, messages, availableUsd, wanted, web = false) {
+  const promptUsd = (promptTokEstimate(messages) * model.zdrMaxIn) / 1e6 + webUsd(model, web);
   if (model.zdrMaxOut <= 0) return wanted;
   const room = Math.floor(((availableUsd - promptUsd) * 1e6) / model.zdrMaxOut);
   return Math.max(0, Math.min(wanted, room));
@@ -147,11 +149,11 @@ export function billedCost(model, tokensIn, tokensOut, upstream) {
  * Chat streaming. onDelta(chunkObj) dipanggil untuk tiap potongan (format OpenAI).
  * → { tokensIn, tokensOut, costUsd, text, finish, upstream (permintaan yang dikirim) }
  */
-export async function streamChat({ model, messages, maxTokens, onDelta, signal, extra = {}, reasoningOff = false }) {
-  const up = buildUpstream({ ...upstreamOf(model), messages, maxTokens, stream: true, extra, reasoningOff });
+export async function streamChat({ model, messages, maxTokens, onDelta, signal, extra = {}, reasoningOff = false, web = false }) {
+  const up = buildUpstream({ ...upstreamOf(model), messages, maxTokens, stream: true, extra, reasoningOff, web });
   const bodyStr = JSON.stringify(up.body);
   const forwardedSha256 = sha256(bodyStr);
-  if (!config.openrouterKey) return { ...(await mockStream({ model, messages, maxTokens, onDelta })), upstream: up, genId: null, forwardedSha256 };
+  if (!config.openrouterKey) return { ...(await mockStream({ model, messages, maxTokens, onDelta, web })), upstream: up, genId: null, forwardedSha256 };
 
   const r = await fetch(up.url, { method: 'POST', signal, headers: up.headers, body: bodyStr });
   if (!r.ok) {
@@ -163,6 +165,7 @@ export async function streamChat({ model, messages, maxTokens, onDelta, signal, 
   }
 
   let usage = null, text = '', finish = null, buf = '', genId = null;
+  const annotations = [];
   const dec = new TextDecoder();
   for await (const part of r.body) {
     buf += dec.decode(part, { stream: true });
@@ -179,6 +182,8 @@ export async function streamChat({ model, messages, maxTokens, onDelta, signal, 
       if (obj.usage) usage = obj.usage;               // usage.cost tetap diteruskan: itulah yang ditagihkan
       const ch = obj.choices?.[0];
       if (ch?.delta?.content) text += ch.delta.content;
+      if (Array.isArray(ch?.delta?.annotations)) annotations.push(...ch.delta.annotations);
+      if (Array.isArray(ch?.message?.annotations)) annotations.push(...ch.message.annotations);
       if (ch?.finish_reason) finish = ch.finish_reason;
       delete obj.provider;                              // nama penyedia hulu tidak perlu diteruskan
       onDelta?.(obj);
@@ -186,20 +191,21 @@ export async function streamChat({ model, messages, maxTokens, onDelta, signal, 
   }
   const tokensIn = usage?.prompt_tokens ?? 0;
   const tokensOut = usage?.completion_tokens ?? 0;
-  return { tokensIn, tokensOut, ...billedCost(model, tokensIn, tokensOut, usage?.cost), text, finish, upstream: up, genId, forwardedSha256 };
+  return { tokensIn, tokensOut, ...billedCost(model, tokensIn, tokensOut, usage?.cost), text, finish, upstream: up, genId, forwardedSha256,
+    sources: citationSources(annotations) };
 }
 
 /**
  * Chat tanpa streaming (/v1/chat/completions stream:false) — jawaban hulu diteruskan (tool_calls tetap utuh).
  * → { json, tokensIn, tokensOut, costUsd, upstream }
  */
-export async function completeChat({ model, messages, maxTokens, extra = {}, signal }) {
-  const up = buildUpstream({ ...upstreamOf(model), messages, maxTokens, stream: false, extra });
+export async function completeChat({ model, messages, maxTokens, extra = {}, signal, web = false }) {
+  const up = buildUpstream({ ...upstreamOf(model), messages, maxTokens, stream: false, extra, web });
   const bodyStr = JSON.stringify(up.body);
   const forwardedSha256 = sha256(bodyStr);
   if (!config.openrouterKey) {
     let text = '';
-    const r = await mockStream({ model, messages, maxTokens, onDelta: (c) => { text += c.choices[0].delta.content; } });
+    const r = await mockStream({ model, messages, maxTokens, web, onDelta: (c) => { text += c.choices[0].delta.content; } });
     return {
       json: { id: 'gen-mock', object: 'chat.completion', model: model.id, created: Math.floor(Date.now() / 1000),
         choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }],
@@ -218,13 +224,28 @@ export async function completeChat({ model, messages, maxTokens, extra = {}, sig
   const tokensIn = u.prompt_tokens ?? 0, tokensOut = u.completion_tokens ?? 0;
   const b = billedCost(model, tokensIn, tokensOut, u.cost);
   delete json.provider;
-  return { json, tokensIn, tokensOut, ...b, upstream: up, genId: typeof json.id === 'string' && json.id.startsWith('gen-') ? json.id : null, forwardedSha256 };
+  return { json, tokensIn, tokensOut, ...b, upstream: up, genId: typeof json.id === 'string' && json.id.startsWith('gen-') ? json.id : null, forwardedSha256,
+    sources: citationSources(json.choices?.[0]?.message?.annotations || []) };
 }
 
 const sha256 = (t) => createHash('sha256').update(t, 'utf8').digest('hex');
 
+// Sumber pencarian web dari anotasi url_citation (skema OpenAI yang dibakukan OpenRouter): hanya URL http(s) + judul, unik
+export function citationSources(annotations = []) {
+  const out = [], seen = new Set();
+  for (const a of annotations) {
+    const c = a?.type === 'url_citation' ? a.url_citation : null;
+    const url = typeof c?.url === 'string' ? c.url.trim() : '';
+    if (!/^https?:\/\//i.test(url) || url.length > 2000 || seen.has(url)) continue;
+    seen.add(url);
+    out.push({ url, title: String(c.title || '').replace(/\s+/g, ' ').trim().slice(0, 200) });
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+
 // Mode tiruan untuk uji lokal tanpa kunci OpenRouter — jawaban jelas berlabel, biaya dihitung dari tarif.
-async function mockStream({ model, messages, maxTokens, onDelta }) {
+async function mockStream({ model, messages, maxTokens, onDelta, web = false }) {
   const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
   const last = typeof lastUser === 'string' ? lastUser : (lastUser.find?.((p) => p.type === 'text')?.text ?? '');
   const reply = `[Local test mode (mock), no OpenRouter key set] You asked ${model.name}: "${String(last).slice(0, 80)}". ` +
@@ -239,5 +260,7 @@ async function mockStream({ model, messages, maxTokens, onDelta }) {
   }
   const tokensIn = Math.ceil(JSON.stringify(messages).length / 3.2);
   const tokensOut = words.length;
-  return { tokensIn, tokensOut, ...billedCost(model, tokensIn, tokensOut, null), text, finish: 'stop' };
+  // mode tiruan: sumber contoh berlabel jelas supaya tampilan daftar sumber bisa diuji tanpa kunci
+  const sources = web ? [{ url: 'https://example.com/mock-source', title: 'Mock source (local test mode)' }] : [];
+  return { tokensIn, tokensOut, ...billedCost(model, tokensIn, tokensOut, null), text, finish: 'stop', sources };
 }

@@ -89,6 +89,7 @@ function cleanPersona(x) {
 }
 // Lampiran PDF untuk pesan berikutnya: { state: 'reading'|'ready'|'error', name, i, n, doc, err }
 let attached = null;
+let webOn = false;           // pencarian web untuk pesan berikutnya saja; mati lagi sesudah terkirim
 const DOC_MAX_CHARS = 200_000;      // ≈50k token: batas satu pesan berdokumen (server menolak >400k karakter total)
 const DOC_FREE_CHARS = 100_000;     // tanpa saldo (pesan gratis): ≈25k token
 let persona = null;          // persona untuk chat baru (chat lama membawa salinannya sendiri)
@@ -101,6 +102,7 @@ function md(text) {
     let h = esc(b)
       .replace(/`([^`\n]+)`/g, '<code>$1</code>')
       .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\[([^\]\n]{1,200})\]\((https?:\/\/[^\s)]+)\)/g, '<a class="link" href="$2" target="_blank" rel="noopener noreferrer nofollow">$1</a>')
       .replace(/^### (.*)$/gm, '<h3>$1</h3>').replace(/^## (.*)$/gm, '<h2>$1</h2>').replace(/^# (.*)$/gm, '<h1>$1</h1>');
     h = h.replace(/(^|\n)((?:[-*] .*(?:\n|$))+)/g, (m, p, list) => `${p}<ul>${list.trim().split('\n').map((l) => `<li>${l.replace(/^[-*] /, '')}</li>`).join('')}</ul>`);
     h = h.replace(/(^|\n)((?:\d+\. .*(?:\n|$))+)/g, (m, p, list) => `${p}<ol>${list.trim().split('\n').map((l) => `<li>${l.replace(/^\d+\. /, '')}</li>`).join('')}</ol>`);
@@ -122,18 +124,21 @@ function receiptHtml(r, idx) {
   const cost = Number(r.costUsd ?? calc ?? 0);
   // Biaya yang ditagih = biaya yang dilaporkan OpenRouter; bisa sedikit beda dari hitungan token × tarif
   const differs = calc != null && Math.abs(calc - cost) > Math.max(0.0000015, cost * 0.02);
+  const w = r.web;
   const paid = r.freeLeft != null
     ? `Free message · ${int(r.freeLeft)} left`
     : r.balanceUsd != null ? `Paid from balance · ${usd(r.balanceUsd)} left` : r.paidBy === 'free' ? 'Free message' : 'Paid from balance';
   const stored = (r.stored || ['model', 'tokens', 'cost', 'time']).join(', ');
   return `<div class="rcpt">
+    ${w ? sourcesHtml(w) : ''}
     <div class="rcpt-math">
       <span><b>${int(tin)}</b> in × ${rate(ri)}</span><span class="op">+</span>
       <span><b>${int(tout)}</b> out × ${rate(ro)}</span><span class="op">per 1M</span><span class="op">${differs ? '· billed' : '='}</span>
       <span class="total">${usd(cost, { max: 6 })}</span>
     </div>
     ${r.mock ? '<div class="why" style="color:var(--gold)">Local test mode: this answer is a placeholder, no model was called and nothing was billed.</div>' : ''}
-    ${differs ? `<div class="why">At listed rates this would be ${usd(calc, { max: 7 })}. Billed is the exact cost OpenRouter reported for this answer, which differs when the provider that served it charges another rate or reasoning or cached tokens are counted.</div>` : ''}
+    ${w ? `<div class="why">Tokens at listed rates: ${usd(calc ?? 0, { max: 7 })}. Billed is the exact cost OpenRouter reported, which includes ${esc(w.engine)}'s ${usd(w.feeUsd, { max: 4 })} search fee. The page text the model read counts as input tokens.</div>`
+      : differs ? `<div class="why">At listed rates this would be ${usd(calc, { max: 7 })}. Billed is the exact cost OpenRouter reported for this answer, which differs when the provider that served it charges another rate or reasoning or cached tokens are counted.</div>` : ''}
     <div class="rcpt-foot">
       <span class="paid">${esc(paid)}</span>
       <span>Stored: ${esc(stored)}</span>
@@ -145,6 +150,17 @@ function receiptHtml(r, idx) {
       <button class="sent" type="button" data-check="${esc(r.generationId)}">Check against OpenRouter</button>
       <span class="rcpt-res" data-res="${esc(r.generationId)}"></span>
     </div>` : ''}
+  </div>`;
+}
+
+// Sumber pencarian web (dari anotasi url_citation OpenRouter). Tautan dibuka tanpa referrer.
+const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
+function sourcesHtml(w) {
+  const list = Array.isArray(w.sources) ? w.sources.filter((x) => /^https?:\/\//i.test(x?.url || '')) : [];
+  return `<div class="srcs">
+    <div class="srcs-h"><span>${pix('globe', 10)} Sources · searched by ${esc(w.engine || 'Exa')}</span><a href="/docs#web-search" target="_blank" rel="noopener">Who sees the search</a></div>
+    ${list.length ? `<ol>${list.map((x) => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer nofollow">${esc(x.title || host(x.url))}</a><span>${esc(host(x.url))}</span></li>`).join('')}</ol>`
+      : '<div class="none">The search ran, but the model did not cite any page.</div>'}
   </div>`;
 }
 
@@ -173,6 +189,7 @@ function setModel(m) {
   const cf = $('#m-conf');
   if (cf) { cf.hidden = !m.confidential; if (m.confidential) { cf.href = m.confidential.verify; cf.title = `Runs inside a hardware enclave (${m.confidential.tee}) at ${m.confidential.provider}. Open its attestation.`; } }
   try { localStorage.setItem(KEY_MODEL, m.id); } catch {}
+  if (webOn && m.confidential) { webOn = false; renderWeb(); toast('Web search is off: Confidential models keep the request inside the enclave'); }
   if (attached) renderAtt();
 }
 
@@ -298,7 +315,7 @@ function msgEl(m, idx) {
   el.className = `msg ${m.role === 'user' ? 'user' : 'ai'}`;
   if (m.role === 'user') {
     const shown = m.doc ? (m.ask ?? '') : (typeof m.content === 'string' ? m.content : '');
-    el.innerHTML = `<div class="bubble">${m.doc ? `<div class="doc-chip">${pix('doc', 12)}<b>${esc(m.doc.name)}</b><span>${int(m.doc.pages)} page${m.doc.pages === 1 ? '' : 's'} · read in this browser</span></div>` : ''}${esc(shown)}</div>`;
+    el.innerHTML = `<div class="bubble">${m.web ? `<div class="web-chip">${pix('globe', 12)}Web search on for this message</div>` : ''}${m.doc ? `<div class="doc-chip">${pix('doc', 12)}<b>${esc(m.doc.name)}</b><span>${int(m.doc.pages)} page${m.doc.pages === 1 ? '' : 's'} · read in this browser</span></div>` : ''}${esc(shown)}</div>`;
   } else {
     el.innerHTML = `<div class="who">${pix('ghost', 14)}${esc(byId.get(m.model)?.name || m.model || '')}</div><div class="body">${md(m.content)}</div>${receiptHtml(m.receipt, idx)}`;
   }
@@ -330,6 +347,7 @@ function errorBlock(code, message) {
     model_needs_balance: 'Free messages work only with low-cost models (marked Free OK). Pick one, or sign in and add balance.',
     free_paused: 'Free messages are paused for today because the daily free budget is used up. Sign in and add balance to keep chatting.',
     bad_model: 'This model is not available right now. Pick another one.',
+    web_balance: `Web search needs a balance. Each search costs ${usd(cfg.webSearch?.feeUsd ?? 0.007, { max: 4 })} on top of the tokens, so free messages cannot use it.`,
   }[code] || message || 'Something went wrong. Try again.';
   const actions = {
     sign_in: '<button class="btn small" data-act="signin" type="button">Sign in</button><a class="btn small ghost" href="/account">How balance works</a>',
@@ -337,6 +355,7 @@ function errorBlock(code, message) {
     model_needs_balance: `<button class="btn small" data-act="free" type="button">Show Free OK models</button>${account ? '<a class="btn small ghost" href="/account">Add balance</a>' : '<button class="btn small ghost" data-act="signin" type="button">Sign in</button>'}`,
     free_paused: account ? '<a class="btn small" href="/account">Add balance</a>' : '<button class="btn small" data-act="signin" type="button">Sign in</button>',
     bad_model: '<button class="btn small" data-act="pick" type="button">Choose a model</button>',
+    web_balance: account ? '<a class="btn small" href="/account">Add balance</a>' : '<button class="btn small" data-act="signin" type="button">Sign in</button>',
   };
   return `<div class="err">${esc(text)}${actions[code] ? `<div class="acts">${actions[code]}</div>` : ''}</div>`;
 }
@@ -360,11 +379,14 @@ async function send(text) {
   // Dokumen: teks PDF (dibaca di browser) + pertanyaan jadi satu pesan biasa; berkasnya tidak pernah dikirim
   const userMsg = doc ? { role: 'user', content: docMessage(doc, ask), ask, doc: { name: doc.name, pages: doc.pages, chars: doc.chars } }
     : { role: 'user', content: text };
+  const web = webOn;
+  if (web) userMsg.web = true;
   chat.messages.push(userMsg);
   const t = $('#thread');
   t.appendChild(msgEl(userMsg));
   $('#prompt').value = ''; autosize();
   if (doc) { attached = null; renderAtt(); }
+  if (web) { webOn = false; renderWeb(); }
 
   const ai = { role: 'assistant', content: '', model: model.id };
   const el = msgEl(ai);
@@ -387,7 +409,7 @@ async function send(text) {
     const r = await fetch('/api/chat', {
       method: 'POST', signal: busy.signal, credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: model.id, messages: history, clientId: CID }),
+      body: JSON.stringify({ model: model.id, messages: history, clientId: CID, ...(web ? { web: true } : {}) }),
     });
     if (!r.ok || !r.headers.get('content-type')?.includes('event-stream')) {
       const j = await r.json().catch(() => ({}));
@@ -480,6 +502,7 @@ function openDrawer(r) {
       <div class="label" style="margin-bottom:8px">Forced on every request</div>
       ${prov ? `<code>"provider": ${esc(JSON.stringify(prov))}</code>` : '<code>"provider": {"zdr": true, "data_collection": "deny"}</code>'}
       <p style="margin-top:8px;color:var(--dim)"><b style="color:var(--ink);font-weight:500">zdr: true</b> means OpenRouter may only use providers with Zero Data Retention: they keep nothing after answering. <b style="color:var(--ink);font-weight:500">data_collection: "deny"</b> blocks providers that train on prompts.</p>${prov?.only ? `<p style="margin-top:8px;color:var(--dim)"><b style="color:var(--ink);font-weight:500">only: ${esc(JSON.stringify(prov.only))}</b> with <b style="color:var(--ink);font-weight:500">allow_fallbacks: false</b> means this Confidential model may only be served by that provider, inside its hardware enclave. If it is down, the request fails instead of going elsewhere. <a class="link" href="${esc(byId.get(r.model)?.confidential?.verify || '/docs#confidential')}" target="_blank" rel="noopener">Check its attestation</a></p>` : ''}
+      ${fwd?.body?.plugins ? `<p style="margin-top:8px;color:var(--dim)"><b style="color:var(--ink);font-weight:500">plugins: web (Exa, 5 results)</b> was on for this message only. OpenRouter runs a search at Exa built from your message and adds the page text to the prompt. Zero data retention covers the model. Exa is a separate company and keeps its own logs of the search under <a class="link" href="${esc(r.web?.policy || 'https://exa.ai/privacy-policy')}" target="_blank" rel="noopener">its own policy</a>.</p>` : ''}
       <p style="margin-top:8px"><a class="proof-link" href="${ZDR_LIST}" target="_blank" rel="noopener">Check OpenRouter's public ZDR list</a></p>
     </div>
     <div>
@@ -488,6 +511,7 @@ function openDrawer(r) {
         maxStr: 700,
         mark: (p) => (p === 'body.provider' ? { cls: 'hl', note: 'forced by GHOSTKEY' }
           : p === 'body.messages[0]' && fwd.body?.messages?.[0]?.role === 'system' ? { cls: 'hl', note: 'your persona, from this browser' }
+          : p === 'body.plugins' ? { cls: 'hl', note: 'web search, switched on by you for this message' }
           : /^body\.messages\[\d+\]$/.test(p) && /^<document /.test(fwd.body?.messages?.[Number(p.match(/\d+/)[0])]?.content || '') ? { cls: 'hl', note: 'text of your PDF, read in this browser' }
           : /^headers\.authorization$/i.test(p) ? { cls: 'hl', note: 'our shared key' } : null),
       })}</pre>` : '<div class="notice warn" style="margin-top:10px">This answer came without a copy of the request. Use the <a class="link" href="/privacy#inspector">inspector</a> to see what GHOSTKEY sends.</div>'}
@@ -668,6 +692,29 @@ async function attachFile(file) {
   renderAtt();
   $('#prompt').focus();
 }
+// ---------- Sakelar pencarian web ----------
+function webWhyNot() {
+  if (!model) return 'Models are still loading';
+  if (model.confidential) return 'Web search is not available on Confidential models: the search would leave the enclave';
+  if (!(account && Number(account.balanceUsd) > 0)) return `Web search needs a balance: each search costs ${usd(cfg.webSearch?.feeUsd ?? 0.007, { max: 4 })}`;
+  return '';
+}
+function renderWeb() {
+  const b = $('#web-btn'), n = $('#web-note');
+  b.setAttribute('aria-pressed', webOn ? 'true' : 'false');
+  b.innerHTML = `${pix('globe', 12)}<span>Web</span>`;
+  n.hidden = !webOn;
+  if (!webOn) { n.innerHTML = ''; return; }
+  const fee = usd(cfg.webSearch?.feeUsd ?? 0.007, { max: 4 });
+  n.innerHTML = `${pix('globe', 14)}<span><b>Web search is on for this message.</b> Exa runs the search through OpenRouter for ${fee}, and the pages it finds count as input tokens. Zero data retention covers the model, not the search: Exa keeps its own logs of the query. <a href="/docs#web-search" target="_blank" rel="noopener">How it works</a></span><button class="att-x" type="button" data-web-x aria-label="Turn web search off">×</button>`;
+}
+function toggleWeb() {
+  if (!webOn) { const why = webWhyNot(); if (why) return toast(why); }
+  webOn = !webOn;
+  renderWeb();
+  $('#prompt').focus();
+}
+
 function clearAtt() { attached = null; renderAtt(); $('#prompt').placeholder = 'Ask anything.'; refreshFree(); }
 
 // ---------- Mulai ----------
@@ -691,6 +738,9 @@ async function init() {
   $('#att-btn').onclick = () => $('#att-file').click();
   $('#att-file').addEventListener('change', (e) => { const f = e.target.files?.[0]; e.target.value = ''; attachFile(f); });
   $('#att').addEventListener('click', (e) => { if (e.target.closest('[data-att-x]')) clearAtt(); });
+  renderWeb();
+  $('#web-btn').onclick = toggleWeb;
+  $('#web-note').addEventListener('click', (e) => { if (e.target.closest('[data-web-x]')) { webOn = false; renderWeb(); } });
   const comp = $('.composer');
   comp.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); comp.classList.add('drop'); } });
   comp.addEventListener('dragleave', (e) => { if (!comp.contains(e.relatedTarget)) comp.classList.remove('drop'); });

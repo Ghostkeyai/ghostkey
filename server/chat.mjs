@@ -3,7 +3,7 @@
 import { config, usdToMicro, microToUsd } from './config.mjs';
 import { modelInfo, streamChat, completeChat, fitMaxTokens, estimateMaxUsd } from './openrouter.mjs';
 import { hold, settle, release, available, canUseFree, consumeFree, bumpFreeCost, freeLeft, recordUsage } from './billing.mjs';
-import { redactForDisplay, STRIPPED, pickAllowed } from './privacy.mjs';
+import { redactForDisplay, STRIPPED, pickAllowed, WEB_SEARCH } from './privacy.mjs';
 import { sseStart, sseData, sseEvent, sendJson } from './http.mjs';
 import { getDaily, bumpDaily } from './db.mjs';
 import { keySpendKey } from './auth.mjs';
@@ -98,14 +98,28 @@ const ERR_TEXT = {
   bad_messages: 'Messages are missing or too long.',
   vision: 'This model cannot read images.',
   upstream: 'The model provider returned an error. You were not charged.',
+  web_balance: `Web search needs a balance. Each search costs $${WEB_SEARCH.feeUsd} on top of the tokens, so it is not part of free messages.`,
+  web_confidential: 'Web search sends a query to Exa, outside the enclave. Turn search off, or pick a model that is not Confidential.',
 };
 export const errText = (code) => ERR_TEXT[code] || code;
 // Kode galat gaya OpenAI untuk /v1
-const API_CODE = { top_up: 'insufficient_balance', key_cap: 'key_daily_limit_reached', key_expired: 'key_expired' };
+const API_CODE = { top_up: 'insufficient_balance', key_cap: 'key_daily_limit_reached', key_expired: 'key_expired',
+  web_balance: 'web_search_needs_balance', web_confidential: 'web_search_not_on_confidential' };
 export const apiCode = (code) => API_CODE[code] || code;
 
 // Sisa batas harian kunci (hanya untuk kunci yang punya batas) → ikut di struk
 const keyExtra = (key) => key?.capMicro != null ? { keyDailyLimitLeftUsd: microToUsd(keyCapLeftMicro(key)) } : {};
+
+// Info pencarian web di struk: mesin, tarif tetap, dan sumber yang dipakai jawaban (dari anotasi OpenRouter)
+const webExtra = (web, r) => web ? { web: { engine: WEB_SEARCH.engine, via: WEB_SEARCH.via, maxResults: WEB_SEARCH.maxResults,
+  feeUsd: WEB_SEARCH.feeUsd, sources: r.sources || [], policy: WEB_SEARCH.policy } } : {};
+// Cek sakelar pencarian web sebelum memanggil hulu
+function webBlock(web, model, payer) {
+  if (!web) return null;
+  if (model.confidential) return [400, 'web_confidential'];
+  if (payer.free) return [402, 'web_balance'];
+  return null;
+}
 
 // Struk yang sama untuk web (event: receipt), /v1 stream (potongan terakhir) dan /v1 biasa (ghostkey_receipt)
 function makeReceipt({ model, r, costMicro, balanceMicro, payer, clientId, freeLimit, extra = {} }) {
@@ -137,6 +151,7 @@ function makeReceipt({ model, r, costMicro, balanceMicro, payer, clientId, freeL
  */
 export async function runChatStream(req, res, opts) {
   const { account, clientId, ip, openaiStream = false, freeLimit = config.freeMessages, key = null } = opts;
+  const web = opts.web === true;
   const extra = pickAllowed(opts.extra || {});
   const fail = (status, code, extraBody = {}) => openaiStream
     ? sendJson(res, status, { error: { message: errText(code), code: apiCode(code) } })
@@ -149,6 +164,8 @@ export async function runChatStream(req, res, opts) {
 
   const payer = pickPayer({ account, model, clientId, ip, freeLimit, api: openaiStream, key });
   if (payer.error) return fail(402, payer.error, { freeLeft: freeLeft(clientId, freeLimit) });
+  const wb = webBlock(web, model, payer);
+  if (wb) return fail(wb[0], wb[1]);
 
   // Hitung batas token & tahan dana
   let maxTokens, heldMicro = 0;
@@ -156,9 +173,9 @@ export async function runChatStream(req, res, opts) {
   if (payer.free) {
     maxTokens = Math.min(want, config.freeMaxTokens);
   } else {
-    maxTokens = fitMaxTokens(model, messages, microToUsd(spendable(account, key)), want);
+    maxTokens = fitMaxTokens(model, messages, microToUsd(spendable(account, key)), want, web);
     if (maxTokens < MIN_TOKENS) return fail(402, keyCapLeftMicro(key) < available(account.id) ? 'key_cap' : 'top_up');
-    heldMicro = usdToMicro(estimateMaxUsd(model, messages, maxTokens)) + 1;
+    heldMicro = usdToMicro(estimateMaxUsd(model, messages, maxTokens, web)) + 1;
     if (!hold(account.id, heldMicro)) return fail(402, 'top_up');
     keyHold(key, heldMicro);
   }
@@ -173,16 +190,18 @@ export async function runChatStream(req, res, opts) {
   try {
     const onDelta = (chunk) => {
       streamedChars += (chunk.choices?.[0]?.delta?.content || '').length;
+      // chat web: cuplikan halaman di anotasi tidak perlu dikirim ke browser (sumbernya ada di struk); /v1 tetap utuh
+      if (!openaiStream && chunk.choices?.[0]?.delta?.annotations) delete chunk.choices[0].delta.annotations;
       if (!res.writableEnded) sseData(res, chunk);
     };
     // Pesan gratis: matikan "thinking" tersembunyi (model penalar bisa menghabiskan jatah tanpa menjawab).
     // Kalau model menolak opsi itu, ulangi sekali tanpa opsi.
     const reasoningOff = !!payer.free;
     let r;
-    try { r = await streamChat({ model, messages, maxTokens, signal: ac.signal, extra, reasoningOff, onDelta }); }
+    try { r = await streamChat({ model, messages, maxTokens, signal: ac.signal, extra, reasoningOff, web, onDelta }); }
     catch (e) {
       if (!reasoningOff || streamedChars || ac.signal.aborted || !(e.status >= 400 && e.status < 500)) throw e;
-      r = await streamChat({ model, messages, maxTokens, signal: ac.signal, extra, onDelta });
+      r = await streamChat({ model, messages, maxTokens, signal: ac.signal, extra, web, onDelta });
     }
     finished = true;
     const costMicro = Math.round(r.costUsd * 1e6);   // dibulatkan ke mikro-USD terdekat (bukan ke atas)
@@ -197,7 +216,7 @@ export async function runChatStream(req, res, opts) {
     } else { balanceMicro = settle(account.id, heldMicro, costMicro, usage); keySettle(key, heldMicro, costMicro); }
 
     const receipt = makeReceipt({ model, r, costMicro, balanceMicro, payer, clientId, freeLimit,
-      extra: { ...(emptyAnswer ? { empty: true, freeRefunded: !!payer.free } : {}), ...keyExtra(key) } });
+      extra: { ...(emptyAnswer ? { empty: true, freeRefunded: !!payer.free } : {}), ...keyExtra(key), ...webExtra(web, r) } });
     if (openaiStream) sseData(res, { id: 'ghostkey-receipt', object: 'chat.completion.chunk', model: model.id, choices: [], ghostkey_receipt: receipt });
     else sseEvent(res, 'receipt', receipt);
     sseData(res, '[DONE]');
@@ -208,7 +227,8 @@ export async function runChatStream(req, res, opts) {
       // Pengguna menekan Stop: tagih perkiraan dari teks yang sudah keluar (hulu tetap menagih kita).
       const tin = Math.ceil(JSON.stringify(messages).length / 3.2);
       const tout = Math.ceil(streamedChars / 4);
-      const estMicro = Math.ceil(tin * model.in + tout * model.out);   // tarif per 1M token × token = mikro-USD
+      // tarif per 1M token × token = mikro-USD; + tarif pencarian bila sakelar web nyala dan teks sudah keluar
+      const estMicro = Math.ceil(tin * model.in + tout * model.out) + (web && streamedChars ? usdToMicro(WEB_SEARCH.feeUsd) : 0);
       const usage = { ...usageBase, tokens_in: tin, tokens_out: tout };
       if (payer.free) { consumeFree(clientId, ip, estMicro); recordUsage({ ...usage, cost_micro: estMicro }); }
       else { settle(account.id, heldMicro, estMicro, usage); keySettle(key, heldMicro, estMicro); }
@@ -234,25 +254,28 @@ export async function runChatJson(req, res, { account, body, clientId, ip, freeL
   if (hasImage(messages) && !model.vision) return err(400, 'vision');
   const payer = pickPayer({ account, model, clientId, ip, freeLimit, api: true, key });
   if (payer.error) return err(402, payer.error);
+  const web = body.web_search === true;
+  const wb = webBlock(web, model, payer);
+  if (wb) return err(wb[0], wb[1]);
   const want = Math.min(Math.max(MIN_TOKENS, Number(body.max_tokens || body.max_completion_tokens) || 4096), 32000);
   let maxTokens, heldMicro = 0;
   if (payer.free) maxTokens = Math.min(want, config.freeMaxTokens);
   else {
-    maxTokens = fitMaxTokens(model, messages, microToUsd(spendable(account, key)), want);
+    maxTokens = fitMaxTokens(model, messages, microToUsd(spendable(account, key)), want, web);
     if (maxTokens < MIN_TOKENS) return err(402, keyCapLeftMicro(key) < available(account.id) ? 'key_cap' : 'top_up');
-    heldMicro = usdToMicro(estimateMaxUsd(model, messages, maxTokens)) + 1;
+    heldMicro = usdToMicro(estimateMaxUsd(model, messages, maxTokens, web)) + 1;
     if (!hold(account.id, heldMicro)) return err(402, 'top_up');
     keyHold(key, heldMicro);
   }
   try {
-    const r = await completeChat({ model, messages, maxTokens, extra: pickAllowed(body) });
+    const r = await completeChat({ model, messages, maxTokens, extra: pickAllowed(body), web });
     const costMicro = Math.round(r.costUsd * 1e6);   // dibulatkan ke mikro-USD terdekat (bukan ke atas)
     const usage = { account_id: account?.id, client_id: payer.free ? clientId : null, source: payer.source,
       model: model.id, tokens_in: r.tokensIn, tokens_out: r.tokensOut, gen_id: r.genId || null };
     let balanceMicro = null;
     if (payer.free) { consumeFree(clientId, ip, costMicro); recordUsage({ ...usage, cost_micro: costMicro }); }
     else { balanceMicro = settle(account.id, heldMicro, costMicro, usage); keySettle(key, heldMicro, costMicro); }
-    const receipt = makeReceipt({ model, r, costMicro, balanceMicro, payer, clientId, freeLimit, extra: keyExtra(key) });
+    const receipt = makeReceipt({ model, r, costMicro, balanceMicro, payer, clientId, freeLimit, extra: { ...keyExtra(key), ...webExtra(web, r) } });
     const h = { 'X-Ghostkey-Generation-Id': String(receipt.generationId || ''), 'X-Ghostkey-Cost': String(receipt.costUsd), 'X-Ghostkey-Rate-In-Per-M': String(model.in),
       'X-Ghostkey-Rate-Out-Per-M': String(model.out) };
     if (payer.free) h['X-Ghostkey-Free-Left'] = String(receipt.freeLeft);

@@ -1,5 +1,13 @@
 [
   {
+    "id": "2026-11-28-web-search",
+    "date": "2026-11-28",
+    "title": "Web search, off by default",
+    "what": "Press Web next to the message box and that one message searches the web first. The answer lists the pages it used under Sources, and the switch turns itself off after sending. The search runs at Exa through OpenRouter for $0.007, which sits inside the same receipt you can check against OpenRouter. Zero data retention covers the model, not the search, and the screen says so: Exa keeps its own logs of the query. Not on free messages or Confidential models. API: add \"web_search\": true.",
+    "link": "https://ghostkeyai.com/docs#web-search",
+    "cta": "How web search works"
+  },
+  {
     "id": "2026-11-27-confidential",
     "date": "2026-11-27",
     "title": "Confidential models, with their attestation",

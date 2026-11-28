@@ -4,7 +4,7 @@ import { config, microToUsd, codeUrl } from './config.mjs';
 import { q } from './db.mjs';
 import { creditStats, ledgerList } from './credit.mjs';
 import { recentHarvests } from './harvester.mjs';
-import { ZDR_LIST_URL } from './privacy.mjs';
+import { ZDR_LIST_URL, WEB_SEARCH } from './privacy.mjs';
 
 export const BLOCKSCOUT = config.blockscout;
 export const addrUrl = (a) => `${BLOCKSCOUT}/address/${a}`;
@@ -50,6 +50,7 @@ export function configData() {
     blockscout: BLOCKSCOUT,
     publicUrl: config.publicUrl,
     mock: !config.openrouterKey,
+    webSearch: { engine: WEB_SEARCH.engine, feeUsd: WEB_SEARCH.feeUsd, maxResults: WEB_SEARCH.maxResults, policy: WEB_SEARCH.policy, docs: WEB_SEARCH.docs },
   };
 }
 

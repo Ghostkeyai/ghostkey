@@ -11,9 +11,11 @@ export const ROADMAP = {
     'Holder perks: 30 free messages/day, 30 free API calls/day, 600 API requests/min', 'Live creator-fee meter',
     'Telegram agent and anti-spam filter', 'On-chain buy alerts and hourly payout posts in the group', 'DEX Screener chart on the site', 'A receipt for every request (generation ID, cost, hash, check against OpenRouter, CSV export)',
     'Spend caps on API keys: a daily USD limit per key and an expiry date', 'Personas saved only in your browser, not our database; their instructions pass through the server with each message like any prompt and are not stored (shown in What we sent)',
-    'Monthly fee report at ghostkeyai.com/report: fees claimed, 25% holders, 75% team, gas kept, Ghost Credit paid, nine checks, and a script that re-checks every transfer and root on-chain'],
-  next: ['Chat with your PDFs, privately (text extracted in the browser)',
-    'Confidential (TEE) models, labelled with attestation links', 'Web search, off by default, honestly labelled'],
+    'Monthly fee report at ghostkeyai.com/report: fees claimed, 25% holders, 75% team, gas kept, Ghost Credit paid, nine checks, and a script that re-checks every transfer and root on-chain',
+    'Chat with your PDFs, privately (text extracted in the browser, file never uploaded)',
+    'Confidential (TEE) models at NEAR AI, labelled with attestation links',
+    'Web search, off by default, one message at a time: Exa through OpenRouter, sources listed, $0.007 per search, the screen says Exa keeps its own logs'],
+  next: [],
   later: ['Private image generation (zero-retention models only)', 'Encrypted chat history export, then cross-device sync',
     'Side-by-side answers from several models with cost', 'Voice input through audio models', 'Team workspaces',
     'Holders suggest which models to add', 'Use GHOSTKEY from Telegram DMs (labelled as not private)'],
@@ -32,7 +34,7 @@ const SYSTEM = `You triage feature requests posted in the Telegram group of GHOS
 
 ## Roadmap
 Shipped: ${ROADMAP.shipped.join('; ')}
-Next (being built): ${ROADMAP.next.join('; ')}
+Next (being built): ${ROADMAP.next.join('; ') || 'every Next item has shipped; new ones will be picked from Later and announced'}
 Later (no dates): ${ROADMAP.later.join('; ')}
 
 ## Decide

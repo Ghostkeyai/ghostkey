@@ -11,7 +11,7 @@ import { makeNonce, verifySignIn, sessionCookie, accountFromSession, logout, nor
 import { getCatalog, modelInfo, publicModel, upstreamOf } from './openrouter.mjs';
 import { freeLeft, apiClientId, holderClientId, quoteCredit, creditDeposit, pruneDaily } from './billing.mjs';
 import { runChatStream, runChatJson, cleanMessages, STORED, errText } from './chat.mjs';
-import { buildUpstream, redactForDisplay, STRIPPED, ZDR_LIST_URL, incomingNotSent, droppedFields, FORCED_PROVIDER } from './privacy.mjs';
+import { buildUpstream, redactForDisplay, STRIPPED, ZDR_LIST_URL, incomingNotSent, droppedFields, FORCED_PROVIDER, WEB_SEARCH } from './privacy.mjs';
 import { ledgerList, ledgerHour, ledgerHourRaw, holderCredits, startCreditScheduler, runHour } from './credit.mjs';
 import { startHarvester, harvesterReady } from './harvester.mjs';
 import { configData, statsData, proofData } from './public.mjs';
@@ -78,7 +78,8 @@ r.post('/api/inspect', async (req) => {
   const messages = cleanMessages(b.messages);
   if (!messages) return [400, { error: 'bad_messages', message: 'Send messages like the OpenAI API: [{"role":"user","content":"..."}].' }];
   const maxTokens = Math.min(Math.max(64, Number(b.max_tokens || b.max_completion_tokens || b.maxTokens) || 4096), 32000);
-  const up = buildUpstream({ ...upstreamOf(model), messages, maxTokens, stream: !!b.stream, extra: b });
+  const web = b.web_search === true || b.web === true;
+  const up = buildUpstream({ ...upstreamOf(model), messages, maxTokens, stream: !!b.stream, extra: b, web });
   return {
     wouldSend: redactForDisplay(up),
     stripped: STRIPPED,
@@ -87,6 +88,9 @@ r.post('/api/inspect', async (req) => {
     forcedProvider: up.body.provider,
     zdrProviders: model.zdrProviders,
     ...(model.confidential ? { confidential: model.confidential } : {}),
+    ...(web ? { webSearch: { ...WEB_SEARCH, note: model.confidential
+      ? 'Not allowed on Confidential models: a real request with web search on is refused before anything is sent.'
+      : 'Search runs at Exa through OpenRouter. Zero data retention covers the model; Exa keeps its own logs of the search under its own policy.' } } : {}),
     zdrList: ZDR_LIST_URL,
     code: codeUrl('server/privacy.mjs'),
   };
@@ -312,7 +316,7 @@ r.post('/api/chat', async (req, res) => {
     account, modelId: b.model, messages: b.messages,
     clientId: holder ? holderClientId(account.id, 'web') : String(b.clientId || ''),
     ...(holder ? { freeLimit: config.holderFreePerDay } : {}),
-    ip, wantTokens: Number(b.maxTokens) || undefined, extra: b,
+    ip, wantTokens: Number(b.maxTokens) || undefined, extra: b, web: b.web === true,
   });
 });
 
@@ -338,7 +342,7 @@ r.post('/v1/chat/completions', async (req, res) => {
   const freeLimit = holder ? config.holderFreePerDay : config.freeApiCalls;
   if (b.stream) {
     return runChatStream(req, res, { account, modelId: b.model, messages: b.messages, clientId, ip, freeLimit,
-      wantTokens: Number(b.max_tokens || b.max_completion_tokens) || undefined, openaiStream: true, extra: b, key });
+      wantTokens: Number(b.max_tokens || b.max_completion_tokens) || undefined, openaiStream: true, extra: b, key, web: b.web_search === true });
   }
   return runChatJson(req, res, { account, body: b, clientId, ip, freeLimit, key });
 });

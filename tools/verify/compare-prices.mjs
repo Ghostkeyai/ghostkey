@@ -16,11 +16,16 @@ try {
 const perM = (x) => +(Number(x || 0) * 1e6).toFixed(4);
 const orBy = new Map(or.data.map((m) => [m.id, m]));
 const zdrIds = new Set(zdr.data.map((e) => e.model_id));
-let match = 0, gone = 0;
+// Confidential variants ("<id>:confidential") are the same OpenRouter model locked to one provider:
+// check the base id on the ZDR list, and compare the price with that provider's own line on it.
+const confLine = (m) => zdr.data.find((e) => e.model_id === m.baseId && e.provider_name === m.confidential?.provider) || null;
+let match = 0, gone = 0, conf = 0;
 const diff = [], notZdr = [];
 for (const m of ours) {
-  if (!zdrIds.has(m.id)) notZdr.push(m.id);
-  const o = orBy.get(m.id);
+  const base = m.baseId || m.id;
+  if (!zdrIds.has(base) || (m.confidential && !confLine(m))) notZdr.push(m.id);
+  if (m.confidential) conf++;
+  const o = m.confidential ? confLine(m) : orBy.get(m.id);
   if (!o) { gone++; continue; }
   const oin = perM(o.pricing.prompt), oout = perM(o.pricing.completion);
   if (oin === m.in && oout === m.out) match++;
@@ -30,6 +35,7 @@ console.log(`${ours.length} GHOSTKEY models`);
 console.log(`  ${match} rates equal to OpenRouter (input and output, USD per 1M tokens)`);
 console.log(`  ${diff.length} different${gone ? `, ${gone} no longer listed by OpenRouter (catalog refreshes hourly)` : ''}`);
 console.log(`  ${ours.length - notZdr.length} on OpenRouter's public ZDR list, ${notZdr.length} not`);
+if (conf) console.log(`  ${conf} Confidential routes compared with their provider's own line on the ZDR list`);
 for (const d of diff.slice(0, 20)) console.log('   ', d);
 for (const id of notZdr.slice(0, 20)) console.log('    not ZDR:', id);
 console.log('\nThe price billed per answer is the usage.cost OpenRouter returns for that call; it is shown in each receipt.');

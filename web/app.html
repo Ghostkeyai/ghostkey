@@ -112,6 +112,26 @@
   .att-btn { flex: none; width: 40px; height: 40px; display: grid; place-items: center; background: none; border: 1px solid transparent; color: var(--dim); cursor: pointer; }
   .att-btn:hover, .att-btn:focus-visible { color: var(--mint); border-color: var(--line-2); }
   .composer.drop form { border-color: var(--mint); background: #9ff0c80a; }
+  /* Sakelar pencarian web: mati bawaan, hanya untuk satu pesan */
+  .web-btn { flex: none; height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; background: none; border: 1px solid transparent; color: var(--dim); cursor: pointer; font: 400 10.5px/1 var(--font-pixel); letter-spacing: .04em; text-transform: uppercase; }
+  .web-btn:hover, .web-btn:focus-visible { color: var(--mint); border-color: var(--line-2); }
+  .web-btn[aria-pressed="true"] { color: #101211; background: var(--mint); border-color: var(--mint); }
+  .web-note { width: min(800px, 100%); margin: 0 auto 8px; border: 1px solid var(--line-2); border-left: 3px solid var(--gold); background: #0f1110; padding: 10px 12px; font-size: 13px; line-height: 1.5; color: var(--dim); display: flex; gap: 10px; align-items: flex-start; }
+  .web-note .pix { flex: none; color: var(--gold); margin-top: 3px; }
+  .web-note b { color: var(--ink); font-weight: 500; }
+  .web-note a { color: var(--mint); }
+  .web-note .att-x { margin-left: auto; }
+  .msg.user .web-chip { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font: 400 12px var(--font-mono); color: var(--dim); }
+  .msg.user .web-chip .pix { color: var(--gold); }
+  .srcs { padding: 10px 14px; border-bottom: 1px dashed var(--line-2); }
+  .srcs .srcs-h { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; color: var(--faint); font-size: 11.5px; margin-bottom: 6px; }
+  .srcs .srcs-h a { color: var(--dim); }
+  .srcs ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+  .srcs li { color: var(--faint); }
+  .srcs li a { color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+  .srcs li a:hover { color: var(--mint); text-decoration: underline; }
+  .srcs li span { margin-left: 8px; color: var(--faint); }
+  .srcs .none { color: var(--faint); }
   .att { width: min(800px, 100%); margin: 0 auto 8px; border: 1px solid var(--line-2); border-left: 3px solid var(--mint); background: #0f1110; padding: 10px 12px; font-size: 13px; color: var(--dim); }
   .att[hidden] { display: none; }
   .att.bad { border-left-color: #ff8a7a; }
@@ -280,9 +300,11 @@
 
     <div class="composer">
       <div class="att" id="att" hidden></div>
+      <div class="web-note" id="web-note" hidden></div>
       <form id="form" autocomplete="off">
         <button class="att-btn" id="att-btn" type="button" aria-label="Attach a PDF" title="Attach a PDF. Its text is read in this browser."></button>
         <input type="file" id="att-file" accept="application/pdf,.pdf" hidden>
+        <button class="web-btn" id="web-btn" type="button" aria-pressed="false" title="Search the web for this message only. Off by default.">Web</button>
         <label class="sr" for="prompt">Message</label>
         <textarea id="prompt" rows="1" placeholder="Ask anything."></textarea>
         <button class="btn" id="send" type="submit">Send</button>
