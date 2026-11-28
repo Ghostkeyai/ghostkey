@@ -81,7 +81,10 @@ const ROLE = 'admin|support|team|mod|moderator|help|helpdesk|desk|care|service|o
 const IMPOSTOR = new RegExp(`(ghost\\s*key).{0,14}\\b(${ROLE})\\b|\\b(${ROLE})\\b.{0,14}(ghost\\s*key)`, 'i');
 // nama yang isinya hampir hanya "GHOSTKEY" (± ai / official / simbol) = menyamar jadi akun proyek
 const BARE_NAME = /^[^a-z0-9]*(the\s*)?ghost\s*key\s*(ai|official|app|io|hq|xyz)?[^a-z0-9]*$/i;
-const looksImpostor = (u) => IMPOSTOR.test(nameOf(u)) || IMPOSTOR.test(u.username || '') || BARE_NAME.test(nameOf(u))
+// nama yang hanya berisi jabatan, juga dieja berspasi/bersimbol (28 Nov: "D E V" menyebar gambar "All HOLDERS DM ME")
+const ROLE_ONLY = /^(the)?(dev|devs|developer|admin|administrator|support|founder|cofounder|ceo|cto|mod|moderator|team|owner|helpdesk|official)$/i;
+const roleOnly = (u) => ROLE_ONLY.test(nameOf(u).normalize('NFKC').replace(/[^a-z]/gi, ''));
+const looksImpostor = (u) => IMPOSTOR.test(nameOf(u)) || IMPOSTOR.test(u.username || '') || BARE_NAME.test(nameOf(u)) || roleOnly(u)
   || (/ghost_?key/i.test(u.username || '') && !/^ghostkeyai(_bot)?$/i.test(u.username || ''));
 // teks yang mengaku dari tim / agen GHOSTKEY
 const CLAIMS_TEAM = new RegExp(`\\b(i'?m|i am|we'?re|we are|this is|from|as)\\b.{0,25}(ghost\\s*key).{0,25}\\b(${ROLE})\\b|\\b(official|verified)\\s+(ghost\\s*key)\\s+(${ROLE})\\b`, 'i');
@@ -254,7 +257,7 @@ async function onMessage(msg) {
   // nama menyamar (bisa diganti sesudah masuk) atau teks mengaku tim/agen GHOSTKEY → hapus + blokir
   if (looksImpostor(from) || CLAIMS_TEAM.test(text)) {
     await tg('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
-    await tg('banChatMember', { chat_id: chatId, user_id: from.id });
+    await tg('banChatMember', { chat_id: chatId, user_id: from.id, revoke_messages: true });
     console.log('[guard] peniru/agen palsu diblokir', from.id, nameOf(from));
     ownerNote(`🛡️ agen/admin palsu diblokir: ${nameOf(from)} — "${text.slice(0, 120)}"`);
     return sayTemp(chatId, `Removed an account pretending to be GHOSTKEY. The team only speaks here as admins, and never DMs first.`, 30_000);
@@ -600,7 +603,7 @@ async function mediaFlag(msg) {
   // gambar yang sama dikirim lagi sesudah dihapus = sengaja → hapus + blokir
   if (mediaRemoved.has(ref.uid)) {
     await tg('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
-    await tg('banChatMember', { chat_id: chatId, user_id: from.id });
+    await tg('banChatMember', { chat_id: chatId, user_id: from.id, revoke_messages: true });
     console.log('[guard] gambar spam berulang → diblokir', from.id, nameOf(from));
     ownerNote(`🛡️ diblokir: ${nameOf(from)} mengirim lagi gambar yang sudah dihapus.`);
     return true;
@@ -614,7 +617,7 @@ async function mediaFlag(msg) {
   await tg('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
   mediaRemoved.add(ref.uid); if (mediaRemoved.size > 5000) mediaRemoved.clear();
   if (bait) {
-    await tg('banChatMember', { chat_id: chatId, user_id: from.id });
+    await tg('banChatMember', { chat_id: chatId, user_id: from.id, revoke_messages: true });
     ownerNote(`🛡️ gambar ajakan DM/promo → diblokir: ${nameOf(from)} — teks gambar: "${v.text.slice(0, 140)}"`);
     return sayTemp(chatId, `Removed an image asking holders to DM someone. Admins never DM first, and the only $GHOST address is behind /ca.`, 30_000).then(() => true);
   }
