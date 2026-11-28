@@ -249,6 +249,8 @@ async function onMessage(msg) {
     console.log('[guard] bot penulis dikeluarkan', from.id, from.username);
     return;
   }
+  // gambar/stiker/GIF lolos semua pola teks (28 Nov: gambar "All HOLDERS DM ME Immediately" berulang) → isi gambar dibaca
+  if (await mediaFlag(msg)) return;
   // nama menyamar (bisa diganti sesudah masuk) atau teks mengaku tim/agen GHOSTKEY → hapus + blokir
   if (looksImpostor(from) || CLAIMS_TEAM.test(text)) {
     await tg('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
@@ -537,6 +539,87 @@ async function aiFlag(msg, text) {
   console.log(`[guard] AI ${label} dihapus (tanpa blokir)`, from.id, nameOf(from));
   ownerNote(`🛡️ AI menghapus ${label} (tanpa blokir): ${nameOf(from)} — "${text.slice(0, 160)}"\nKalau salah, pulihkan dengan membalas member itu di grup.`);
   await sayTemp(chatId, label === 'scam' ? `Removed a message that looked like a scam. Admins never DM first, and the only $GHOST address is behind /ca.` : `${esc(nameOf(from))}, outside promo and "DM me" offers aren't allowed here.`, 20_000);
+  return true;
+}
+
+// ---------- pemeriksa gambar: baca teks di gambar (AI vision, ZDR), hapus ajakan DM/penipuan ----------
+// Blokir hanya dari pola pasti: teks gambar berisi ajakan DM/inbox, atau gambar yang sama dikirim lagi sesudah dihapus.
+// Label AI saja (tanpa pola) → hapus + lapor pemilik, tanpa blokir (sama dengan aturan 26 Nov untuk teks).
+const MEDIA_DAILY = Number(process.env.MEDIA_SPAM_DAILY || 400);
+let mediaDay = '', mediaUsed = 0;
+const mediaSeen = new Map();             // file_unique_id → { label, text } (spam berulang tidak memanggil AI lagi)
+const mediaRemoved = new Set();          // file_unique_id gambar yang sudah dihapus
+const DM_BAIT = /\b(dm|pm|inbox|message|text|contact|write|ping)\s*(me|us|admin|now|immediately|asap)\b|\bholders?\b.{0,40}\b(dm|pm|inbox|contact|message)\b|\b(dm|pm|inbox)\b.{0,20}\b(holders?|everyone|all)\b/i;
+function mediaRef(msg) {
+  if (msg.photo?.length) { const ok = msg.photo.filter((x) => (x.width || 0) <= 1280); const f = (ok.length ? ok : msg.photo).at(-1); return { id: f.file_id, uid: f.file_unique_id }; }
+  const st = msg.sticker;
+  if (st) { const f = (st.is_animated || st.is_video) ? st.thumbnail : st; return f ? { id: f.file_id, uid: st.file_unique_id } : null; }
+  for (const k of ['animation', 'video', 'video_note']) if (msg[k]?.thumbnail) return { id: msg[k].thumbnail.file_id, uid: msg[k].file_unique_id };
+  if (msg.document && /^image\//.test(msg.document.mime_type || '') && (msg.document.file_size || 0) < 5e6) return { id: msg.document.file_id, uid: msg.document.file_unique_id };
+  if (msg.document?.thumbnail) return { id: msg.document.thumbnail.file_id, uid: msg.document.file_unique_id };
+  return null;
+}
+async function mediaJudge(ref) {
+  if (mediaSeen.has(ref.uid)) return mediaSeen.get(ref.uid);
+  const day = new Date().toISOString().slice(0, 10);
+  if (day !== mediaDay) { mediaDay = day; mediaUsed = 0; }
+  if (!OR_KEY || mediaUsed >= MEDIA_DAILY) return null;
+  mediaUsed++;
+  try {
+    const f = await tg('getFile', { file_id: ref.id });
+    if (!f?.file_path || (f.file_size || 0) > 5e6) return null;
+    const buf = Buffer.from(await (await fetch(`https://api.telegram.org/file/bot${TOKEN}/${f.file_path}`, { signal: AbortSignal.timeout(15_000) })).arrayBuffer());
+    const ext = (f.file_path.split('.').pop() || '').toLowerCase();
+    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
+    const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST', signal: AbortSignal.timeout(20_000),
+      headers: { authorization: `Bearer ${OR_KEY}`, 'content-type': 'application/json', 'HTTP-Referer': 'https://ghostkeyai.com', 'X-Title': 'GHOSTKEY Guard' },
+      body: JSON.stringify({ model: MODEL, max_tokens: 300, temperature: 0, reasoning: { enabled: false }, provider: { zdr: true, data_collection: 'deny' },
+        messages: [{ role: 'system', content: `You moderate the Telegram group of GHOSTKEY, a private AI chat app with the token $GHOST. A member posted this image. Copy any readable text in it, then classify it.
+"scam" = asks people to DM/inbox/contact someone, fake support or admin, airdrop/claim/reward bait, wallet recovery, profit schemes.
+"promo" = advertises a third-party service or another project: marketing agencies, KOLs, paid trending, listing or volume services, votes, calls/gem channels, another token or group.
+"ok" = everything else: memes, reactions, art, and anything about GHOSTKEY or $GHOST itself, including its charts, screenshots, announcements, DexScreener page or boosts.
+When unsure, answer ok. Reply with JSON only, label first: {"label":"ok|promo|scam","text":"<text in the image, max 200 chars>"}` },
+          { role: 'user', content: [{ type: 'image_url', image_url: { url: `data:${mime};base64,${buf.toString('base64')}` } }] }] }),
+    });
+    const j = await r.json();
+    const raw = String(j.choices?.[0]?.message?.content || '');
+    const label = (raw.match(/"label"\s*:\s*"(ok|promo|scam)"/i) || [])[1]?.toLowerCase();
+    if (!label) return null;
+    let text = ''; try { text = String(JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)).text || ''); } catch {}
+    const out = { label, text: text.slice(0, 300) };
+    mediaSeen.set(ref.uid, out); if (mediaSeen.size > 3000) mediaSeen.clear();
+    return out;
+  } catch (e) { console.warn('[media]', e.message); return null; }
+}
+async function mediaFlag(msg) {
+  if (msg.chat.type === 'private') return false;
+  const ref = mediaRef(msg); if (!ref) return false;
+  const from = msg.from, chatId = msg.chat.id;
+  const caption = msg.caption || '';
+  // gambar yang sama dikirim lagi sesudah dihapus = sengaja → hapus + blokir
+  if (mediaRemoved.has(ref.uid)) {
+    await tg('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
+    await tg('banChatMember', { chat_id: chatId, user_id: from.id });
+    console.log('[guard] gambar spam berulang → diblokir', from.id, nameOf(from));
+    ownerNote(`🛡️ diblokir: ${nameOf(from)} mengirim lagi gambar yang sudah dihapus.`);
+    return true;
+  }
+  const v = await mediaJudge(ref);
+  if (!v) return false;
+  const seen = `${v.text} ${caption}`;
+  const bait = DM_BAIT.test(seen) || isMarketing(seen) || CLAIMS_TEAM.test(seen);
+  console.log('[media]', v.label, bait ? 'pola' : '-', from.id, nameOf(from), JSON.stringify(v.text.slice(0, 80)));
+  if (!bait && v.label === 'ok') return false;
+  await tg('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
+  mediaRemoved.add(ref.uid); if (mediaRemoved.size > 5000) mediaRemoved.clear();
+  if (bait) {
+    await tg('banChatMember', { chat_id: chatId, user_id: from.id });
+    ownerNote(`🛡️ gambar ajakan DM/promo → diblokir: ${nameOf(from)} — teks gambar: "${v.text.slice(0, 140)}"`);
+    return sayTemp(chatId, `Removed an image asking holders to DM someone. Admins never DM first, and the only $GHOST address is behind /ca.`, 30_000).then(() => true);
+  }
+  ownerNote(`🛡️ AI menghapus gambar ${v.label} (tanpa blokir): ${nameOf(from)} — teks gambar: "${v.text.slice(0, 140)}"\nKalau salah, minta member itu kirim ulang.`);
+  await sayTemp(chatId, v.label === 'scam' ? `Removed an image that looked like a scam. Admins never DM first.` : `${esc(nameOf(from))}, outside promo isn't allowed here.`, 20_000);
   return true;
 }
 
